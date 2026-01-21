@@ -1,0 +1,1 @@
+Directory containing background information for the project.
