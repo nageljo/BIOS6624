@@ -1,0 +1,39 @@
+---
+title: "Project0"
+author: "Joseph Nagel"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# read in packages
+```{r}
+library(tidyverse)
+library(naniar)
+```
+
+
+# read in data
+```{r}
+cort = read_csv('../Data/Project0_Clean_v2.csv')
+```
+
+```{r}
+head(cort, 10)
+```
+
+```{r}
+vis_miss(cort)
+```
+
+```{r}
+cort %>% filter(is.na(`DHEA (pg/dl)`))
+```
+
+```{r}
+summary(cort)
+```
+
