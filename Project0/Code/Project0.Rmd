@@ -16,24 +16,29 @@ library(naniar)
 ```
 
 
-# read in data
+read in data
 ```{r}
 cort = read_csv('../Data/Project0_Clean_v2.csv')
 ```
 
+
 ```{r}
-head(cort, 10)
+head(cort)
 ```
 
+check missingness
 ```{r}
 vis_miss(cort)
 ```
 
+look at missing outcome values
 ```{r}
 cort %>% filter(is.na(`DHEA (pg/dl)`))
 ```
+missing cortisol values are coded as 9999!
+
 
 ```{r}
-summary(cort)
+cort %>% filter(`Cortisol (ug/dl)` == 9999)
 ```
 
