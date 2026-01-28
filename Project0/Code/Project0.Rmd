@@ -22,6 +22,7 @@ read in data
 cort = (
     read_csv('../Data/Project0_Clean_v2.csv', show_col_types = FALSE)
     %>% clean_names()
+    %>% mutate()
 )
 ```
 
@@ -29,6 +30,17 @@ cort = (
 ```{r}
 head(cort)
 ```
+
+```{r}
+(
+    cort
+    %>% filter(cortisol_ug_dl == 9999)
+    %>% mutate(
+        
+    )
+)
+```
+
 
 check missingness
 ```{r}
@@ -97,25 +109,32 @@ What is the expected range of the outcomes?
 
 ## Q1
 
-Create scatterplot of captime since wake ve booklet time since wake (DO THIS)
-Calculate a correlation + p-value
-Check for bias i.e. one value consistently lower or higher
-    one-sample t-test of mean zero
-    
-use a mixed model for this since we have repeated measures
+Create scatterplot of captime since wake vs booklet time since wake (DO THIS)
 
-could use descriptive statistics on the differences
+
+book_min_from_wake = book time - diary wake time
+LMM: book_min_from_wake ~ cap_time_since_wake + (1 | id)
+    intercept: 0 for perfect agreement
+    slope: 1 for perfect agreement
+    if these are not 0 and 1 i need to interpret this
+    what do we expect if there is perfect agreement and 
+
+
 
 what are the differences in missingness between the groups
     
 ## Q2
 
-what proportion of people make it within 7.5 minute window?
+what proportion of samples are within 7.5 minute window for each timepoint separately?
 
-what proportion of people make it within 15 minute window?
+what proportion of samples are within 15 minute window for each timepoint separately?
+
+just descriptives
 
 ## Q3
         
 use the time you think is best from a statistical point of view
+
+piecewise with a break at 30 mins
 
 
