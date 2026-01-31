@@ -79,6 +79,12 @@ cort %>% filter(dhea_nmol_l >= 5.205)
 ```
 
 ```{r}
+## check ok 3037
+cort %>% filter(subject_id == 3037)
+```
+
+
+```{r}
 ## check missingness
 # vis_miss(cort)
 ```
@@ -136,6 +142,7 @@ contest(agreement_model, L = c(0, 1), rhs = 1)
 (
     cort
     %>% filter(collection_sample %in% c(2, 4))
+    # %>% filter(across(matches("adherence"), ~!is.na(.)))
     %>% summarise(
         across(
             matches("adherence"),
@@ -151,6 +158,14 @@ contest(agreement_model, L = c(0, 1), rhs = 1)
 )
 ```
 
+```{r}
+(
+    ggplot(data = cort %>% filter(mems_time_since_wake >= 0.5), aes(x = mems_time_since_wake, y = log1p(dhea_nmol_l + 1)))
+    + geom_point()
+    + geom_vline(xintercept = 0.5)
+    + geom_smooth()
+)
+```
 
 
 
