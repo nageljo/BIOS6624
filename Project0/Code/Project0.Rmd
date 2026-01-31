@@ -6,135 +6,155 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
-# read in packages
 ```{r}
+## read in packages
 library(tidyverse)
 library(naniar)
 library(janitor)
+library(lme4)
+library(lmerTest)
 ```
 
-
-read in data
 ```{r}
-cort = (
-    read_csv('../Data/Project0_Clean_v2.csv', show_col_types = FALSE)
+(
+    ## read in dataframe
+    read_csv(
+        '../Data/Project0_Clean_v2.csv',
+        show_col_types = FALSE
+    )
+    
+    ## clean names
     %>% clean_names()
-    %>% mutate()
+    
+    ## create time since wake columns
+    %>% group_by(subject_id, daynumb)
+    %>% arrange(collection_sample, .by_group = TRUE)
+    %>% fill(sleep_diary_reported_wake_time, .direction = "down")
+    %>% ungroup()
+    %>% mutate(
+        .after = sleep_diary_reported_wake_time,
+        mems_time_since_wake =
+            as.numeric(me_ms_clock_time - sleep_diary_reported_wake_time) / 3600,
+        booklet_time_since_wake =
+            as.numeric(booket_clock_time - sleep_diary_reported_wake_time) / 3600,
+    )
+    
+    ## create 15 and 30 min window indicator columns
+    %>% mutate(
+        mems_adherence_15 = case_when(
+            collection_sample %in% c(1, 3) ~ NA_real_,
+            collection_sample == 2 ~ if_else(abs(mems_time_since_wake - 30/60) <= 7.5/60, 1, 0),
+            collection_sample == 4 ~ if_else(abs(mems_time_since_wake - 10) <= 7.5/60, 1, 0)
+        ),
+        mems_adherence_30 = case_when(
+            collection_sample %in% c(1, 3) ~ NA_real_,
+            collection_sample == 2 ~ if_else(abs(mems_time_since_wake - 30/60) <= 15/60, 1, 0),
+            collection_sample == 4 ~ if_else(abs(mems_time_since_wake - 10) <= 15/60, 1, 0)
+        ),
+        booklet_adherence_15 = case_when(
+            collection_sample %in% c(1, 3) ~ NA_real_,
+            collection_sample == 2 ~ if_else(abs(booklet_time_since_wake - 30/60) <= 7.5/60, 1, 0),
+            collection_sample == 4 ~ if_else(abs(booklet_time_since_wake - 10) <= 7.5/60, 1, 0)
+        ),
+        booklet_adherence_30 = case_when(
+            collection_sample %in% c(1, 3) ~ NA_real_,
+            collection_sample == 2 ~ if_else(abs(booklet_time_since_wake - 30/60) <= 15/60, 1, 0),
+            collection_sample == 4 ~ if_else(abs(booklet_time_since_wake - 10) <= 15/60, 1, 0)
+        )
+    )
+) -> cort
+```
+
+```{r}
+## check for cortisol_nmol_l outliers ----- THIS GOES IN QUESTION 3 MODELING: mention in methods that we checked for bad values
+cort %>% filter(cortisol_nmol_l >= 80)
+```
+
+```{r}
+## check for dhea_nmol_l outliers ----- THIS GOES IN QUESTION 3 MODELING: mention in methods that we checked for bad values
+cort %>% filter(dhea_nmol_l >= 5.205)
+```
+
+```{r}
+## check missingness
+# vis_miss(cort)
+```
+
+```{r}
+## per column missingness
+(
+    cort
+    %>% select(c(booket_clock_time, me_ms_clock_time, sleep_diary_reported_wake_time, cortisol_nmol_l, dhea_nmol_l))
+    %>% summarise(
+        across(
+            everything(),
+            ~mean(is.na(.))
+        )
+    )
+    %>% round(2)
 )
 ```
 
 
 ```{r}
-head(cort)
+## plot for Q1
+(
+    ggplot(data = cort, aes(x = booklet_time_since_wake, y = mems_time_since_wake))
+    + geom_abline(intercept = 0, slope = 1)
+    + geom_point(alpha = 0.2, size = 3)
+    + labs(
+        x = "Booklet Time Since Wake (Hours)",
+        y = "MEMs Time Since Wake (Hours)"
+    )
+    + theme_classic()
+)
 ```
 
 ```{r}
+## model for Q1
+agreement_model <- lmer(
+    mems_time_since_wake ~ booklet_time_since_wake + (1 | subject_id),
+    data = cort
+)
+summary(agreement_model)
+fixef(agreement_model, parm = "beta_")
+confint(agreement_model, parm = "beta_")
+```
+
+```{r}
+## test if slope is different from 1
+## H0: slope = 1
+contest(agreement_model, L = c(0, 1), rhs = 1)
+```
+
+
+```{r}
+## table for Q2
 (
     cort
-    %>% filter(cortisol_ug_dl == 9999)
-    %>% mutate(
-        
+    %>% filter(collection_sample %in% c(2, 4))
+    %>% summarise(
+        across(
+            matches("adherence"),
+            ~mean(., na.rm = TRUE)
+        )
+    )
+    %>% round(2)
+    %>% pivot_longer(
+        cols = everything(),
+        names_to = c("recording_device", ".value"),
+        names_pattern = c("(.*)_(.*_.*)")
     )
 )
 ```
 
 
-check missingness
-```{r}
-vis_miss(cort)
-```
-
-look at missing outcome values
-```{r}
-cort %>% filter(is.na(dhea_pg_dl))
-```
-
-
-missing cortisol values are coded as 9999!
-```{r}
-cort %>% filter(`Cortisol (ug/dl)` == 9999)
-```
-
-# Questions from class
-Some samples are missing values why how
-    time recorded by no value
-        sample provided but it could not be analysed (nothing we can do)
-    
-participant recorded a time they woke up (use this)
-    analyse time since waking (not sample intervals)
-    
-Missing data in cap times by be due to user error    
-
-What is agreement in times Q1?
-    scatter plot of cap time since wake vs booklet time since wake
-        is there a strong correlation or association?
-    is one earlier or later than the other or are they similar
-    
-9999 is missing in cortizol
-
-Q3: changes over time?
-    we expect cortizol to spike 30 mins after waking and gradually decrease over the next 10 hours
-        we want to know if we are seeing the expected trends using the spit papers (can we catch the trend)
-        what is the difference between wake and 30 mins?
-        what is the rate of decline after 30 mins?
-            this is a piecewise regression question
-            
-Use nmol/ml for both measures!
-
-Q1 Q2: statistical or just descriptive?
-    Q1: correlation p-value and significant bias between measurements
-    Q2: descriptive okay
-    
-Q2: what is adhering? (same for 30 min and 10 hour points)
-    good adherance is 7.5 mins before or after the timepoint
-    adiquite is 15 mins before or after
-    
-We have different days
-    this is our problem
-
-User error messes up the cap... are bad values
-    some cap times may be inaccurate
-    
-What is the expected range of the outcomes?
-    cortizol nmol/ml biological range:
-        over 26 is high but possible
-        over 80 is probably incorrect (lab error)
-    dhea nmol/ml
-        upper detection limit is 5.205 (5.205s are likely an error unless 1 person has repeated high measures in either case consider excluding them)
-        
-# Analysis Plan
-
-## Q1
-
-Create scatterplot of captime since wake vs booklet time since wake (DO THIS)
-
-
-book_min_from_wake = book time - diary wake time
-LMM: book_min_from_wake ~ cap_time_since_wake + (1 | id)
-    intercept: 0 for perfect agreement
-    slope: 1 for perfect agreement
-    if these are not 0 and 1 i need to interpret this
-    what do we expect if there is perfect agreement and 
 
 
 
-what are the differences in missingness between the groups
-    
-## Q2
 
-what proportion of samples are within 7.5 minute window for each timepoint separately?
-
-what proportion of samples are within 15 minute window for each timepoint separately?
-
-just descriptives
-
-## Q3
-        
-use the time you think is best from a statistical point of view
-
-piecewise with a break at 30 mins
 
 
