@@ -169,6 +169,12 @@ contest(agreement_model, L = c(0, 1), rhs = 1)
 hist(as.numeric(cort$sleep_diary_reported_wake_time)/3600)
 ```
 
+```{r}
+(
+    cort
+    %>% filter(xor(is.na(me_ms_clock_time), is.na(booket_clock_time)))
+)
+```
 
 
 
