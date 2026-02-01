@@ -3,10 +3,16 @@ title: "Project 0"
 author: "Joseph Nagel"
 date: "`r Sys.Date()`"
 output: pdf_document
+fontsize: 12pt
+mainfont: Helvetica
+header-includes:
+  - \usepackage{setspace}
+  - \doublespacing
 ---
 
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
 ```
 
 ```{r}
@@ -148,7 +154,7 @@ confint(agreement_model_prop, parm = "beta_")
 ```{r}
 ## test if slope is different from 1
 ## H0: slope = 1
-contest(agreement_model, L = c(0, 1), rhs = 1)
+contest(agreement_model_prop, L = c(0, 1), rhs = 1)
 ```
 
 
@@ -219,21 +225,55 @@ anomalous_dhea_subjects
     %>% filter(cortisol_nmol_l <= HIGH_CORTISOL)
     
     ## create col for mems > 0.5
-    %>% mutate(
-        mems_time_since_wake_30_min = pmax(0, mems_time_since_wake - 0.5)
-    )
+    %>% mutate(mems_time_since_wake_30_min = pmax(0, mems_time_since_wake - 0.5))
+) -> q3_cort_data
     
     ## build model
-    %>% lmer(
-        log1p(cortisol_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
-        data = .
-    )
-) -> cortisol_model
-summary(cortisol_model)
+cort_model <- lmer(
+    log1p(cortisol_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
+    data = q3_cort_data
+)
+summary(cort_model)
 ```
 
 ```{r}
-## dhea model
+
+# Create a smooth grid of time values for a clean fitted line
+grid <- tibble(
+  mems_time_since_wake = seq(
+    min(q3_cort_data$mems_time_since_wake, na.rm = TRUE),
+    max(q3_cort_data$mems_time_since_wake, na.rm = TRUE),
+    length.out = 200
+  )
+) %>%
+  mutate(
+    mems_time_since_wake_30_min = pmax(0, mems_time_since_wake - 0.5)
+  )
+
+# Predict from fixed effects only, then back-transform to nmol/L
+grid <- grid %>%
+  mutate(
+    fit_log = predict(cort_model, newdata = grid, re.form = NA),
+    # fit_nmol = expm1(fit_log)
+  )
+
+# Plot raw points + fitted line (original scale)
+ggplot(q3_cort_data, aes(x = mems_time_since_wake, y = log1p(cortisol_nmol_l))) +
+  geom_point(alpha = 0.35, size = 1, na.rm = TRUE) +
+  geom_line(data = grid, aes(x = mems_time_since_wake, y = fit_log),
+            color = "#1f77b4", linewidth = 1.1) +
+  labs(
+    title = "Cortisol vs Time Since Wake",
+    subtitle = "Points = observed cortisol (nmol/L); line = fitted (fixed effects; back-transformed)",
+    x = "Time since wake (hours)",
+    y = "log(Cortisol + 1)"
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+## define dhea analysis dataset
 (
     cort
     ## exclusion criteria
@@ -244,15 +284,50 @@ summary(cortisol_model)
     %>% mutate(
         mems_time_since_wake_30_min = pmax(0, mems_time_since_wake - 0.5)
     )
-    
-    ## build model
-    %>% lmer(
-        log1p(dhea_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
-        data = .
-    )
-) -> cortisol_model
-summary(cortisol_model)
+) -> q3_dhea_data
+
+## build model
+dhea_model <- lmer(
+    log1p(dhea_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
+    data = q3_dhea_data
+)
+summary(dhea_model)
 ```
+
+```{r}
+grid_dhea <- tibble(
+  mems_time_since_wake = seq(
+    min(q3_dhea_data$mems_time_since_wake, na.rm = TRUE),
+    max(q3_dhea_data$mems_time_since_wake, na.rm = TRUE),
+    length.out = 200
+  )
+) %>%
+  mutate(
+    mems_time_since_wake_30_min = pmax(0, mems_time_since_wake - 0.5)
+  ) %>%
+  mutate(
+    fit_log  = predict(dhea_model, newdata = ., re.form = NA),
+    fit_nmol = expm1(fit_log)
+  )
+
+ggplot(q3_dhea_data, aes(x = mems_time_since_wake, y = dhea_nmol_l)) +
+  geom_point(alpha = 0.35, size = 1, na.rm = TRUE) +
+  geom_line(
+    data = grid_dhea,
+    
+    aes(x = mems_time_since_wake, y = fit_nmol),
+    color = "#1f77b4",
+    linewidth = 1.1
+  ) +
+  labs(
+    title = "DHEA vs Time Since Wake",
+    subtitle = "Points = observed DHEA (nmol/L); line = fitted (fixed effects only; back-transformed)",
+    x = "Time since wake (hours)",
+    y = "DHEA (nmol/L)"
+  ) +
+  theme_minimal()
+```
+
 
 # Introduction
 
