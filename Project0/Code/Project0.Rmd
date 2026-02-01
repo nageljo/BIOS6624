@@ -1,5 +1,5 @@
 ---
-title: "Project0"
+title: "Project 0"
 author: "Joseph Nagel"
 date: "`r Sys.Date()`"
 output: pdf_document
@@ -79,7 +79,7 @@ cort %>% filter(dhea_nmol_l >= 5.205)
 ```
 
 ```{r}
-## check ok 3037
+## check id 3037
 cort %>% filter(subject_id == 3037)
 ```
 
@@ -122,7 +122,7 @@ cort %>% filter(subject_id == 3037)
 ```{r}
 ## model for Q1
 agreement_model <- lmer(
-    mems_time_since_wake ~ booklet_time_since_wake + (1 | subject_id),
+    mems_time_since_wake - booklet_time_since_wake ~ booklet_time_since_wake + (1 | subject_id),
     data = cort
 )
 summary(agreement_model)
@@ -162,11 +162,12 @@ contest(agreement_model, L = c(0, 1), rhs = 1)
 (
     ggplot(data = cort %>% filter(mems_time_since_wake >= 0.5), aes(x = mems_time_since_wake, y = log1p(dhea_nmol_l + 1)))
     + geom_point()
-    + geom_vline(xintercept = 0.5)
-    + geom_smooth()
 )
 ```
 
+```{r}
+hist(as.numeric(cort$sleep_diary_reported_wake_time)/3600)
+```
 
 
 
