@@ -16,7 +16,15 @@ library(naniar)
 library(janitor)
 library(lme4)
 library(lmerTest)
+library(emmeans)
 ```
+
+```{r}
+## define outlier outcome values
+HIGH_CORTISOL = 80
+HIGH_DHEA = 5.205
+```
+
 
 ```{r}
 (
@@ -30,7 +38,7 @@ library(lmerTest)
     %>% clean_names()
     
     ## create time since wake columns
-    %>% group_by(subject_id, daynumb)
+    %>% group_by(subject_id, collection_date)
     %>% arrange(collection_sample, .by_group = TRUE)
     %>% fill(sleep_diary_reported_wake_time, .direction = "down")
     %>% ungroup()
@@ -105,12 +113,30 @@ cort %>% filter(subject_id == 3037)
 ```
 
 
+think about proportional bias and additive bias
+
+```{r}
+## model for Q1
+
+agreement_model_prop = lmer(
+    mems_time_since_wake ~ booklet_time_since_wake + (1 | subject_id),
+    data = cort
+)
+agreement_model_add = lmer(
+    mems_time_since_wake - booklet_time_since_wake ~ (1 | subject_id),
+    data = cort
+)
+summary(agreement_model_prop)
+fixef(agreement_model_prop, parm = "beta_")
+confint(agreement_model_prop, parm = "beta_")
+```
+
 ```{r}
 ## plot for Q1
 (
     ggplot(data = cort, aes(x = booklet_time_since_wake, y = mems_time_since_wake))
     + geom_abline(intercept = 0, slope = 1)
-    + geom_point(alpha = 0.2, size = 3)
+    + geom_point(alpha = 0.2, size = 3, na.rm = TRUE)
     + labs(
         x = "Booklet Time Since Wake (Hours)",
         y = "MEMs Time Since Wake (Hours)"
@@ -120,21 +146,11 @@ cort %>% filter(subject_id == 3037)
 ```
 
 ```{r}
-## model for Q1
-agreement_model <- lmer(
-    mems_time_since_wake - booklet_time_since_wake ~ booklet_time_since_wake + (1 | subject_id),
-    data = cort
-)
-summary(agreement_model)
-fixef(agreement_model, parm = "beta_")
-confint(agreement_model, parm = "beta_")
-```
-
-```{r}
 ## test if slope is different from 1
 ## H0: slope = 1
 contest(agreement_model, L = c(0, 1), rhs = 1)
 ```
+
 
 
 ```{r}
@@ -149,14 +165,27 @@ contest(agreement_model, L = c(0, 1), rhs = 1)
             ~mean(., na.rm = TRUE)
         )
     )
-    %>% round(2)
+    %>% round(3)
     %>% pivot_longer(
         cols = everything(),
-        names_to = c("recording_device", ".value"),
+        names_to = c("recording_method", ".value"),
         names_pattern = c("(.*)_(.*_.*)")
     )
 )
 ```
+
+```{r}
+(
+    cort
+    %>% select(subject_id, collection_date, daynumb)
+    %>% summarise(
+        .by = subject_id,
+        n_dates = n_distinct(collection_date),
+        n_daynumbs = n_distinct(daynumb),
+    )
+)
+```
+
 
 ```{r}
 (
@@ -166,17 +195,72 @@ contest(agreement_model, L = c(0, 1), rhs = 1)
 ```
 
 ```{r}
-hist(as.numeric(cort$sleep_diary_reported_wake_time)/3600)
+hist(as.numeric(cort$sleep_diary_reported_wake_time) / 3600)
 ```
 
 ```{r}
-(
+anomalous_dhea_subjects <- (
     cort
-    %>% filter(xor(is.na(me_ms_clock_time), is.na(booket_clock_time)))
+    %>% summarise(
+        .by = subject_id,
+        n_limit_dhea = sum(dhea_nmol_l >= HIGH_DHEA, na.rm = TRUE)
+    )
+    %>% filter(n_limit_dhea > 1)
 )
+anomalous_dhea_subjects
 ```
 
+```{r}
+## cortisol model
+(
+    cort
+    ## exclusion criteria
+    %>% filter(!(subject_id %in% select(anomalous_dhea_subjects, subject_id)))
+    %>% filter(cortisol_nmol_l <= HIGH_CORTISOL)
+    
+    ## create col for mems > 0.5
+    %>% mutate(
+        mems_time_since_wake_30_min = pmax(0, mems_time_since_wake - 0.5)
+    )
+    
+    ## build model
+    %>% lmer(
+        log1p(cortisol_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
+        data = .
+    )
+) -> cortisol_model
+summary(cortisol_model)
+```
 
+```{r}
+## dhea model
+(
+    cort
+    ## exclusion criteria
+    %>% filter(!(subject_id %in% select(anomalous_dhea_subjects, subject_id)))
+    %>% filter(dhea_nmol_l < HIGH_DHEA)
+    
+    ## create col for mems > 0.5
+    %>% mutate(
+        mems_time_since_wake_30_min = pmax(0, mems_time_since_wake - 0.5)
+    )
+    
+    ## build model
+    %>% lmer(
+        log1p(dhea_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
+        data = .
+    )
+) -> cortisol_model
+summary(cortisol_model)
+```
+
+# Introduction
+
+# Methods
+
+# Results
+
+# Discussion
 
 
 
