@@ -5,11 +5,12 @@ date: "`r Sys.Date()`"
 output: pdf_document
 fontsize: 12pt
 mainfont: Helvetica
+number_sections: true
+geometry: margin=1in
 header-includes:
   - \usepackage{setspace}
   - \doublespacing
 ---
-
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
@@ -117,9 +118,6 @@ cort %>% filter(subject_id == 3037)
     %>% round(2)
 )
 ```
-
-
-think about proportional bias and additive bias
 
 ```{r}
 ## model for Q1
@@ -230,7 +228,7 @@ anomalous_dhea_subjects
     
     ## build model
 cort_model <- lmer(
-    log1p(cortisol_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
+    log(cortisol_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
     data = q3_cort_data
 )
 summary(cort_model)
@@ -254,13 +252,13 @@ grid <- tibble(
 grid <- grid %>%
   mutate(
     fit_log = predict(cort_model, newdata = grid, re.form = NA),
-    # fit_nmol = expm1(fit_log)
+    fit_nmol = exp(fit_log)
   )
 
 # Plot raw points + fitted line (original scale)
-ggplot(q3_cort_data, aes(x = mems_time_since_wake, y = log1p(cortisol_nmol_l))) +
+ggplot(q3_cort_data, aes(x = mems_time_since_wake, y = cortisol_nmol_l)) +
   geom_point(alpha = 0.35, size = 1, na.rm = TRUE) +
-  geom_line(data = grid, aes(x = mems_time_since_wake, y = fit_log),
+  geom_line(data = grid, aes(x = mems_time_since_wake, y = fit_nmol),
             color = "#1f77b4", linewidth = 1.1) +
   labs(
     title = "Cortisol vs Time Since Wake",
@@ -288,7 +286,7 @@ ggplot(q3_cort_data, aes(x = mems_time_since_wake, y = log1p(cortisol_nmol_l))) 
 
 ## build model
 dhea_model <- lmer(
-    log1p(dhea_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
+    log(dhea_nmol_l) ~ mems_time_since_wake + mems_time_since_wake_30_min + (1 | subject_id),
     data = q3_dhea_data
 )
 summary(dhea_model)
@@ -307,7 +305,7 @@ grid_dhea <- tibble(
   ) %>%
   mutate(
     fit_log  = predict(dhea_model, newdata = ., re.form = NA),
-    fit_nmol = expm1(fit_log)
+    fit_nmol = exp(fit_log)
   )
 
 ggplot(q3_dhea_data, aes(x = mems_time_since_wake, y = dhea_nmol_l)) +
@@ -331,9 +329,32 @@ ggplot(q3_dhea_data, aes(x = mems_time_since_wake, y = dhea_nmol_l)) +
 
 # Introduction
 
+Cortisol and dehydroepiandrosterone (DHEA) are hormones released by the endocrine system that help regulate physiological responses to stress. These hormones exhibit pronounced diurnal patterns, meaning their levels change systematically across the day. Understanding these patterns is important as disruptions of these rhythms may indicate altered regulation of the stress response system.
+
+The data analyzed in this report come from a study designed to evaluate a novel at-home saliva collection method for characterizing diurnal hormone profiles. Specifically, the investigator tested the Saliva Procurement and Integrated Testing (SPIT) booklet, which collects saliva on filter paper strips, and compared timing information recorded by the booklet to an electronic monitoring cap on the storage bottle. The dataset included 31 subjects who collected saliva samples four times per day for three consecutive days. Sampling was scheduled at waking, 30 minutes post-waking, before lunch, and 600 minutes post-waking. Subjects were allowed to define their own waking time and before lunch timing. The goals of the study were to determine the agreement between the booklet and electronic monitoring cap samples times, measure the adherence to the study protocol's sampling times, and characterize the diurnal patterns of cortisol and DHEA. These goals were assessed with the following statistical hypotheses:
+
+1. Is there significant additive or proportional bias between the booklet and electronic measuring cap sample times?
+
+2. What proportion of samples fell within $\pm 7.5$ minutes (good) and $\pm 15$ minutes (adequate) of the target times for the 30-min and 10-hour post-waking collections?
+
+3. For cortisol and DHEA: What is the change in hormone level from waking to 30 minutes post waking? What is the change per hour in hormone level after 30 minutes post waking?
+
 # Methods
 
+The key measures in the dataset (subject's wake time, booklet sample time, electronic monitoring cap sample time, cortisol (nmol/l), and DHEA (nmol/l)) were assessed for missingness and outliers. Outliers were defined as cortisol $\ge 80$ nmol/l and DHEA $\ge 5.205$ nmol/l (the assay upper detection limit for DHEA). Any samples exceeding these limits and all samples for subjects with multiple readings at the DHEA assay limit were excluded from the diurnal pattern analysis. Cortisol and DHEA were log-plus-one-transformed to reduce skewness and mitigate the violation of regression assumptions. The time between waking and sample collection was calculated for both the booklet and electronic cap samples times.
+
+To address the agreement and bias between timing methods, we estimated the additive and proportional bias between the electronic cap and booklet sample times. Additive bias represents a systematic difference in the reported times independent of time of day while proportional bias represents a relationship in the difference between the measurements that changes throughout the day. A linear mixed-effects model was fit with electronic cap sample time since wake as the outcome and booklet sample time since wake as the predictor with a subject-specific random intercept to account for repeated measures. Additive bias was evaluated by testing whether the fixed effect intercept was different from 0 and proportional bias was evaluated by testing whether the fixed effect slope was different from 1.
+
+To evaluate adherence to the study protocol's collection schedule, we assessed the proportion of samples that fell within $\pm 7.5$ minutes (good adherence) and $\pm 15$ minutes (adequate adherence) of the target collection time for the 30-minute and 10-hour post-waking collections. For each sample, we calculated the absolute difference between the observed collection time and the target collection time and created indicator variables for each of the adherence windows ($\pm 7.5$ and  $\pm 15$ minutes). The outcome was defined as the proportion of observed (nonmissing) samples that fell within the window. This was performed for both the booklet and electronic cap times.
+
+To characterize diurnal patterns in cortisol and DHEA, we estimated changes over two intervals: waking to 30 minutes post waking and after 30 minutes post waking. The sample time source (booklet vs. electronic cap) used to define measurement time was selected based on the agreement and bias analysis. As described above, hormone concentrations were log transformed to reduce right skewness prior to modeling. Piecewise linear mixed-effects models were fit with time since waking as the predictor and hormone level as the outcome, including a subject-specific random intercept to account for repeated measures. Models included a single knot at 30 minutes (0.5 hours) to allow distinct linear trends before and after the knot. The relative (multiplicative) change from waking to 30 minutes post waking and the relative change per hour after 30 minutes were estimated from the fitted model. For each of the hormones, any outlier values were removed prior to analysis and a complete case analysis was performed on the remained observations.
+
+
 # Results
+
+**Table 1** shows the missingness for the measures of interest in the dataset. 
+
+
 
 # Discussion
 
