@@ -198,7 +198,7 @@ agreement_table <- tidy(agreement_model, effects = "fixed", conf.int = TRUE) %>%
     `95% CI` = paste0("(", round(conf.low, 3), ", ", round(conf.high, 3), ")"),
     `Hypothesis` = paste0("beta = ", null_hypothesis),
     `t-value` = round(statistic, 2),
-    `P-value` = format.pval(p.value, digits = 3, eps = 0.001)
+    `p-value` = format.pval(p.value, digits = 3, eps = 0.001)
   )
 
 # convert to kable
@@ -400,6 +400,7 @@ hormone_models_table <- kable(final_table, digits = 2, caption = "Relative Chang
 ```
 
 
+
 ```{r}
 # create plot of fitted regression line over the original data
 pred_data <- data.frame(
@@ -490,6 +491,9 @@ adherence_table
 ## Diurnal Hormone Patterns
 
 
+```{r, include=TRUE}
+hormone_models_table
+```
 
 ```{r, include=TRUE, fig.cap="Fitted Diurnal Trajectories of Cortisol and DHEA"}
 plot_cort_model + plot_dhea_model
