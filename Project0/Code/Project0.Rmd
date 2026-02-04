@@ -1,7 +1,7 @@
 ---
-title: "Project 0"
-author: "Joseph Nagel"
-date: "`r Sys.Date()`"
+title: "Evaluation of At-Home Sample Timing for Diurnal Hormone Level Characterization"
+author: ""
+date: ""
 output: pdf_document
 fontsize: 12pt
 mainfont: Helvetica
@@ -10,6 +10,8 @@ geometry: margin=1in
 header-includes:
   - \usepackage{setspace}
   - \doublespacing
+  # - \usepackage{float}
+  # - \floatplacement{table}{H}
 ---
 
 ```{r setup, include=FALSE}
@@ -32,10 +34,10 @@ library(patchwork)
 library(broom.mixed)
 
 # Set all plots to 'Hold' position
-opts_chunk$set(fig.pos = "H", out.extra = "")
+# opts_chunk$set(fig.pos = "H", out.extra = "")
 
 # Set kableExtra to always use hold_position globally
-options(kable_styling_latex_options = "hold_position")
+
 ```
 
 ```{r}
@@ -95,12 +97,12 @@ HIGH_DHEA = 5.205
     # exclude extreme values and subject 3037
     %>% mutate(
         cortisol_nmol_l = case_when(
-            cortisol_nmol_l >= 80 ~ NA_real_,
+            cortisol_nmol_l >= HIGH_CORTISOL ~ NA_real_,
             subject_id == 3037 ~ NA_real_,
             .default = cortisol_nmol_l
         ),
         dhea_nmol_l = case_when(
-            dhea_nmol_l >= 5.205 ~ NA_real_,
+            dhea_nmol_l >= HIGH_DHEA ~ NA_real_,
             subject_id == 3037 ~ NA_real_,
             .default = dhea_nmol_l
         ),
@@ -210,7 +212,6 @@ agreement_table <- kable(agreement_table, caption = "Agreement Model Fixed Effec
 # scatter plot with fitted line for Q1
 # get betas from the model
 betas <- fixef(agreement_model)
-betas <- fixef(agreement_model)
 
 agreement_plot <- ggplot(data = cort, aes(x = booklet_time_since_wake, y = mems_time_since_wake)) +
   geom_point(alpha = 0.3, size = 2, shape = 1, na.rm = TRUE) + 
@@ -234,13 +235,11 @@ agreement_plot <- ggplot(data = cort, aes(x = booklet_time_since_wake, y = mems_
     y = "MEMS Time Since Wake (Hours)"
   ) +
   theme_classic() +
-  theme(legend.position = c(0.25, 0.9))
-
-# agreement_plot
+  theme(legend.position.inside = c(0.25, 0.9))
 ```
 
 ```{r, include=TRUE}
-# table for Q2
+# table of adherence values
 (
     cort
     %>% filter(collection_sample %in% c(2, 4))
@@ -279,10 +278,6 @@ adherence_table <- table_data %>%
     align = c("l", "c", "c"),
     escape = TRUE 
   ) %>%
-  kable_styling(
-    latex_options = "hold_position",
-    full_width = FALSE
-  ) %>%
   # 3. Bold the column headers
   row_spec(0, bold = TRUE) %>%
   add_header_above(c(" " = 1, "Adherence Thresholds" = 2), bold = TRUE)
@@ -298,7 +293,6 @@ cort_model <- lmer(
         (1 | subject_id),
     data = cort
 )
-# summary(cort_model)
 ```
 
 ```{r}
@@ -310,6 +304,8 @@ pred_data <- data.frame(
     length.out = 200
   )
 )
+
+# get predicted values
 pred_data$pred_log <- predict(cort_model, newdata = pred_data, re.form = NA)
 pred_data$pred_cortisol <- exp(pred_data$pred_log)
 
@@ -323,7 +319,6 @@ plot_cort_model <- (
     )
     + theme_classic()
 )
-# plot_cort_model
 ```
 
 
@@ -336,7 +331,6 @@ dhea_model <- lmer(
         (1 | subject_id),
     data = cort
 )
-# summary(dhea_model)
 ```
 
 ```{r}
@@ -392,14 +386,12 @@ final_table <- rbind(table_cort, table_dhea) %>%
         Period = period,
         `% Change` = rel_change_pct,
         `95% CI` = paste0("(", round(lower_ci, 2), ", ", round(upper_ci, 2), ")"),
-        `p-value` = p.value
+        `p-value` = format.pval(p.value, digits = 3, eps = 0.001)
     )
 
-# Print
+# COnvert to kable
 hormone_models_table <- kable(final_table, digits = 2, caption = "Relative Changes in Cortisol and DHEA") %>% row_spec(0, bold = TRUE)
 ```
-
-
 
 ```{r}
 # create plot of fitted regression line over the original data
@@ -423,9 +415,7 @@ plot_dhea_model <- (
     )
     + theme_classic()
 )
-# plot_dhea_model
 ```
-
 
 # Introduction
 
@@ -464,13 +454,12 @@ Data avalability and missingness are summarized in **Table 1**. Notably, the  bo
 
 ```{r, include=TRUE}
 missingness_table %>%
-  as_kable_extra(booktabs = TRUE) %>%
-  kable_styling(latex_options = "HOLD_position")
+  as_kable_extra(booktabs = TRUE)
 ```
 
 ## Measurement Method Agreement
 
-The linear mixed-effect model comparing the booklet sample times to the MEMS cap sample times (**Table 2**) revealed significant attative bias between the measurements. The model's slope was not significantly different from 1 (p-value = 0.2) indicating no proportional bias (bias did not change with time) between the measurement  methods. However, the intercept was significantly different from 0 (p-value < 0.001) indicating addative bias. At waking, MEMS cap sample times were on average 10.2 minutes (95% CI: 4.4, 15.9) minutes later than booklet sample times. The relationship is visualized in **Figure 1**. While the model showed slight additive bias between the measurements, the plot shows high agreement between the two methods, with the fitted and perfect agreement ($y=x$) lines almost completely overlapping.
+The linear mixed-effect model comparing the booklet sample times to the MEMS cap sample times (**Table 2**) revealed significant additive bias between the measurements. The model's slope was not significantly different from 1 (p-value = 0.2) indicating no proportional bias between the measurement  methods. This indicates that the average time difference between the measurement methods did not change with the time of day. However, the intercept was significantly different from 0 (p-value < 0.001) indicating additive bias. At waking, MEMS cap sample times were on average 10.2 minutes (95% CI: 4.4, 15.9) minutes later than booklet sample times. The relationship is visualized in **Figure 1**. While the model showed slight additive bias between the measurements, the plot shows high agreement between the two methods, with the fitted and perfect agreement ($y=x$) lines almost completely overlapping.
 
 ```{r, include=TRUE}
 agreement_table
@@ -490,6 +479,7 @@ adherence_table
 
 ## Diurnal Hormone Patterns
 
+For the analysis of diurnal hormone patters, the booklet time since waking was used as the predictor. While there was slight bias between measurements, the overall agreement between the MEMS cap and booklet times was high and the booklet times had less missingness. The parameters of interest estimated from the linear mixed-effects models of cortisol and DHEA are shown in **Table 4**. Both cortisol and DHEA were modeled on the log scale, so the resulting coefficients indicate relative (multiplicative) change in hormone level. There was, on average, a 20.2% (95% CI: -3.1, 49.1) relative increase in cortisol from waking to 30 minutes post waking; this increase was not significant (p-value = 0.093). After 30 minutes post waking, cortisol decreased by an average of 12.5% (95% CI: 10.6, 14.4) per hour, a significant decrease (p-value < 0.001). From waking to 30 minutes post waking, there was a significant average relative decrease in DHEA of 41.3% (p-value < 0.001; 95% CI: 29.7, 51.0). After 30 minutes post waking, there was an average relative decrease in DHEA of 8.8% (95% CI: 7.2, 10.5) per hour; this decrease was significant (p-value < 0.001). These relationships are visualized in **Figure 2** for both models. Note that the relationships are visualized on the original nmol/L scale.
 
 ```{r, include=TRUE}
 hormone_models_table
@@ -499,9 +489,23 @@ hormone_models_table
 plot_cort_model + plot_dhea_model
 ```
 
+# Discussion and Conclusions
+
+The evaluation of the sampling time data between the booklet and MEMS cap reveals that the SPIT booklet is an effective method for at-home data collection especially with respect to data completeness; the booklet sample times has less missingness (9.4%) than the MEMS cap times (16%). However, there was a significant additive bias between the two timing methods with MEMS cap times recorded at waking on average 10.2 minutes later than booklet times. This implies that patients likely recorded intended sample times somewhat before the moment they opened the bottle. Importantly, this bias remained constant and did not change throughout the day.
+
+Protocol adherence appeared substantially higher when based on self-reported booklet entries rather than objective MEMS timestamps. Specifically, the proportion of samples meeting the criteria for good adherence ($\pm$ 7.5 minutes) was 21.1 percentage points higher in the booklet compared to the MEMS cap, while adequate adherence ($\pm$ 15 minutes) was 19.5 percentage points higher. This large discrepancy, coupled with the observed additive bias, suggests that participants may have recorded times that aligned better with the prescribed schedule than their actual sampling behavior reflected.
+
+Biologically, the study partially confirmed the investigator’s hypotheses regarding diurnal hormone patterns. Cortisol exhibited the expected trajectory of an initial rise (20.2% increase) followed by a steady decline, although the initial rise did not reach statistical significance ($p=0.093$), likely due to the modest sample size ($n=31$). Conversely, DHEA deviated from the hypothesized sharp increase, instead showing a significant 41.3% relative decrease in the first 30 minutes post-waking. This unexpected result suggests the DHEA awakening response may differ from Cortisol, potentially peaking strictly at waking or declining earlier than anticipated.
+
+Several limitations should be considered. First, the sample size ($n=31$) was relatively small, which likely contributed to the lack of statistical significance for the cortisol rise despite a relatively large effect size. Second, the reliance on self-reported sleep diary wake times introduces a source of error that affects all time since wake calculations. Finally, the discrepancy between booklet and MEMS adherence rates suggests that self-reported timing data should be interpreted with caution, as it may overestimate protocol compliance.
 
 
-# Discussion
+# Reproducible Research
+
+Github Link: https://github.com/nageljo/BIOS6624
+
+Data Path: `C:\Users\josep\OneDrive\AdvancedData\BIOS6624\Project0\Data\Project0_Clean_v2.csv`
+
 
 
 
