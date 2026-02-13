@@ -1,0 +1,104 @@
+---
+title: "Project1"
+author: "Joe Nagel"
+date: ""
+output: pdf_document
+fontsize: 12pt
+mainfont: Helvetica
+number_sections: true
+geometry: margin=1in
+header-includes:
+  - \usepackage{setspace}
+  - \doublespacing
+  - \usepackage{float}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
+```
+
+```{r}
+# read in packages
+library(tidyverse)
+library(naniar)
+library(janitor)
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(gtsummary)
+library(gt)
+library(knitr)
+library(kableExtra)
+library(patchwork) 
+library(broom.mixed)
+```
+
+```{r}
+# read in data
+(
+    read_csv('../Data/hiv_6624_final.csv', show_col_types = FALSE, name_repair = "unique_quiet")
+    %>% clean_names()
+    
+    # remove bad bmi values
+    %>% mutate(bmi = if_else(bmi <= 0 | 250 <= bmi, NA_real_, bmi))
+    
+    %>% select(newid, years, agg_ment, agg_phys, leu3n, vload)
+)
+```
+```{r}
+summary(hiv$years)
+```
+
+```{r}
+# Validation check
+validation_results <- hiv %>%
+  select(newid, years, age, smoke, educbas, race) %>%
+  filter(years %in% c(0, 2)) %>%
+  group_by(newid) %>%
+  summarise(
+    # Check that these stay the same (should have only 1 unique value)
+    race_stable = n_distinct(race) == 1,
+    smoke_stable = n_distinct(smoke) == 1,
+    educ_stable = n_distinct(educbas) == 1,
+    has_both_years = all(c(0, 2) %in% years) & n() == 2,
+        
+    # 2. Only calculate age if they have both years, otherwise return NA
+    age_correct = if(has_both_years) {
+       (age[years == 2] - age[years == 0]) == 2
+    } else { 
+       NA 
+    },
+    
+    .groups = "drop"
+  )
+
+# View rows that FAILED the check
+errors <- validation_results %>%
+  filter(!(race_stable & smoke_stable & educ_stable & age_correct) | is.na(age_correct))
+
+print(errors)
+```
+
+```{r}
+vis_miss(hiv)
+```
+
+```{r}
+naniar::prop_miss_var(hiv$newid)
+```
+
+```{r}
+(
+    hiv
+    %>% filter(years %in% c(0, 2))
+    %>% summarize(
+        .by = c(years, smoke),
+        n = n()
+    )
+    %>% arrange(n)
+)
+```
+
+
+
+

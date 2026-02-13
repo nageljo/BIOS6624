@@ -39,7 +39,6 @@ HIGH_CORTISOL = 80
 HIGH_DHEA = 5.205
 ```
 
-
 ```{r}
 (
     # read in dataframe
