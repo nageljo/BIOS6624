@@ -1,6 +1,6 @@
 ---
-title: "Project1"
-author: "Joe Nagel"
+title: ""
+author: ""
 date: ""
 output: pdf_document
 fontsize: 12pt
@@ -40,65 +40,92 @@ library(broom.mixed)
     %>% clean_names()
     
     # remove bad bmi values
-    %>% mutate(bmi = if_else(bmi <= 0 | 250 <= bmi, NA_real_, bmi))
+    %>% mutate(bmi = if_else(bmi <= 0 | 250 <= bmi, NA_real_, bmi),
+               timepoint = if_else(years == 0, 'baseline', as.character(years)),
+               educbas = factor(educbas),
+               race = factor(race),
+               smoke = factor(smoke),
+               hard_drugs = factor(hard_drugs))
     
-    %>% select(newid, years, agg_ment, agg_phys, leu3n, vload)
-)
-```
-```{r}
-summary(hiv$years)
-```
-
-```{r}
-# Validation check
-validation_results <- hiv %>%
-  select(newid, years, age, smoke, educbas, race) %>%
-  filter(years %in% c(0, 2)) %>%
-  group_by(newid) %>%
-  summarise(
-    # Check that these stay the same (should have only 1 unique value)
-    race_stable = n_distinct(race) == 1,
-    smoke_stable = n_distinct(smoke) == 1,
-    educ_stable = n_distinct(educbas) == 1,
-    has_both_years = all(c(0, 2) %in% years) & n() == 2,
-        
-    # 2. Only calculate age if they have both years, otherwise return NA
-    age_correct = if(has_both_years) {
-       (age[years == 2] - age[years == 0]) == 2
-    } else { 
-       NA 
-    },
+    # hiv positive only
+    %>% filter(hivpos == 1)
     
-    .groups = "drop"
-  )
-
-# View rows that FAILED the check
-errors <- validation_results %>%
-  filter(!(race_stable & smoke_stable & educ_stable & age_correct) | is.na(age_correct))
-
-print(errors)
+    # filter to baseline and year 2
+    %>% filter(years %in% c(0, 2))
+    %>% select(newid, timepoint, agg_ment, agg_phys, leu3n,
+               vload, hard_drugs, age, bmi, smoke, educbas, race)
+    %>% pivot_wider(
+        id_cols = newid,
+        names_from = timepoint,
+        names_glue = "{.value}_{timepoint}",
+        values_from = !c(newid, timepoint)
+    )
+    
+    # calculate differences between baseline and year 2
+    %>% mutate(
+        .keep = 'unused',
+        .after = newid,
+        diff_agg_ment = agg_ment_2 - agg_ment_baseline,
+        diff_agg_phys = agg_phys_2 - agg_phys_baseline,
+        diff_leu3n = leu3n_2 - leu3n_baseline,
+        log_ratio_vload = log10(vload_2/vload_baseline)
+    )
+    %>% select(-matches('_2'))
+) -> hiv
 ```
 
 ```{r}
-vis_miss(hiv)
+hiv %>%
+  # Pivot the difference columns longer so we can plot them all at once
+  pivot_longer(cols = starts_with("diff"), names_to = "outcome", values_to = "change") %>%
+  
+  ggplot(aes(x = hard_drugs_baseline, y = change, fill = hard_drugs_baseline)) +
+  geom_boxplot(na.rm = TRUE) +
+  facet_wrap(~outcome, scales = "free_y") +
+  theme_minimal() +
+  labs(title = "Treatment Response (Year 0 to 2) by Baseline Hard Drug Use",
+       y = "Change from Baseline")
 ```
 
-```{r}
-naniar::prop_miss_var(hiv$newid)
-```
 
 ```{r}
 (
     hiv
-    %>% filter(years %in% c(0, 2))
-    %>% summarize(
-        .by = c(years, smoke),
-        n = n()
+    %>% mutate(missing = if_any(everything(), is.na))
+    %>% summarise(
+        .by = hard_drugs_baseline,
+        missing = mean(missing)
     )
-    %>% arrange(n)
 )
 ```
 
 
 
+```{r}
+get_formula <- \(outcome) paste0(outcome, " ~
+                            hard_drugs_baseline + age_baseline + bmi_baseline + smoke_baseline + educbas_baseline + race_baseline")
 
+# frequentist models
+agg_ment_mod_freq <- lm(get_formula("log_ratio_vload"), data = hiv)
+summary(agg_ment_mod_freq)
+```
+
+```{r}
+anova(agg_ment_mod_freq)
+```
+
+
+```{r}
+hiv$diff_leu3n %>% hist
+```
+
+# Project 1
+## Joe Nagel
+
+# Introduction
+
+HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and quality of life measurements on men infected with HIV. Data was collected on subjects at the begining of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to charaterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in aggregate physical quality of life score, aggregate mental quality of life score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for age, bmi, smoking status, education, and race. We will compare Bayesian and non-Bayesian analysis approaches.
+
+# Preliminary Methods
+
+We will begin by checking the analysis variables for missingness and outliers; we will specifically check if missingness differs between hard drug users and non-hard drug uses. We will calculate the change in outcomes as the value at Year 2 minus the value at Year 0. We will also visualize the distributions of the four outcome difference scores using histograms and boxplots to identify potential outliers and assess the need for any transformations prior to analysis. For the primary analysis, we will generate descriptive statistics to compare baseline demographic and clinical characteristics between those who reported hard drug use and those who did not. To evaluate the effect of baseline hard drug use on treatment response, we will fit four separate multivariable linear regression models—one for each outcome (change in aggregate physical score, aggregate mental score, CD4+ count, and viral load). The primary predictor of interest will be baseline hard drug use status. All models will adjust for the specified demographic variables: age, BMI, smoking status, education, and race. We will approach modeling from both a Bayesian and non-Bayesian approach. For the non-Bayesian, we will use standard Ordinary Least Squares (OLS) regression, reporting point estimates, 95% confidence intervals, and p-values. For the Bayesian, we will fit Bayesian linear regression models. We will specify non-informative or weakly informative prior distributions for our parameters and estimate posterior distributions using Markov Chain Monte Carlo (MCMC) methods. We will report posterior means, 95% Highest Posterior Density (HPD) credible intervals, and posterior probabilities to evaluate the primary research question. We will compare the results from both frameworks and determine if there are any differences in the interpretations. Finally, we will investigate if any relationship between hard drug use and the outcomes is explained by adherence to the treatment protocol. 
