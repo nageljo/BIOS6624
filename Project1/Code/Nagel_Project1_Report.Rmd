@@ -68,7 +68,7 @@ library(broom.mixed)
         diff_agg_ment = agg_ment_2 - agg_ment_baseline,
         diff_agg_phys = agg_phys_2 - agg_phys_baseline,
         diff_leu3n = leu3n_2 - leu3n_baseline,
-        log_ratio_vload = log10(vload_2/vload_baseline)
+        log_ratio_vload = log(vload_2/vload_baseline)
     )
     %>% select(-matches('_2'))
 ) -> hiv
