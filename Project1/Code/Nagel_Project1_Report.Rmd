@@ -34,13 +34,19 @@ library(broom.mixed)
 ```
 
 ```{r}
-# read in data
 (
     read_csv('../Data/hiv_6624_final.csv', show_col_types = FALSE, name_repair = "unique_quiet")
     %>% clean_names()
-    
+) -> hiv
+```
+
+
+```{r}
+# read in data
+(
+    hiv
     # remove bad bmi values
-    %>% mutate(bmi = if_else(bmi <= 0 | 250 <= bmi, NA_real_, bmi),
+    %>% mutate(bmi = if_else(bmi %in% c(-1, 999), NA_real_, bmi),
                timepoint = if_else(years == 0, 'baseline', as.character(years)),
                educbas = factor(educbas),
                race = factor(race),
@@ -53,7 +59,7 @@ library(broom.mixed)
     # filter to baseline and year 2
     %>% filter(years %in% c(0, 2))
     %>% select(newid, timepoint, agg_ment, agg_phys, leu3n,
-               vload, hard_drugs, age, bmi, smoke, educbas, race)
+               vload, hard_drugs, adh, age, bmi, smoke, educbas, race)
     %>% pivot_wider(
         id_cols = newid,
         names_from = timepoint,
@@ -68,14 +74,15 @@ library(broom.mixed)
         diff_agg_ment = agg_ment_2 - agg_ment_baseline,
         diff_agg_phys = agg_phys_2 - agg_phys_baseline,
         diff_leu3n = leu3n_2 - leu3n_baseline,
-        log_ratio_vload = log(vload_2/vload_baseline)
+        diff_log_vload = log10(vload_2) - log10(vload_baseline),
+        adherence = adh_2
     )
     %>% select(-matches('_2'))
-) -> hiv
+) -> hiv_clean
 ```
 
 ```{r}
-hiv %>%
+hiv_clean %>%
   # Pivot the difference columns longer so we can plot them all at once
   pivot_longer(cols = starts_with("diff"), names_to = "outcome", values_to = "change") %>%
   
@@ -90,11 +97,13 @@ hiv %>%
 
 ```{r}
 (
-    hiv
+    hiv_clean
+    %>% select(matches("diff"), hard_drugs_baseline)
     %>% mutate(missing = if_any(everything(), is.na))
     %>% summarise(
         .by = hard_drugs_baseline,
-        missing = mean(missing)
+        missing = mean(missing),
+        n()
     )
 )
 ```
@@ -106,7 +115,7 @@ get_formula <- \(outcome) paste0(outcome, " ~
                             hard_drugs_baseline + age_baseline + bmi_baseline + smoke_baseline + educbas_baseline + race_baseline")
 
 # frequentist models
-agg_ment_mod_freq <- lm(get_formula("log_ratio_vload"), data = hiv)
+agg_ment_mod_freq <- lm(get_formula("diff_leu3n"), data = hiv)
 summary(agg_ment_mod_freq)
 ```
 
