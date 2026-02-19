@@ -47,9 +47,17 @@ library(broom.mixed)
     hiv
     # remove bad bmi values
     %>% mutate(
+        log_vload = log10(vload),
+        agg_ment = if_else(agg_ment < 0, NA_real_, agg_ment),
         bmi = if_else(bmi %in% c(-1, 999), NA_real_, bmi),
         timepoint = if_else(years == 0, 'baseline', as.character(years)),
-        hard_drugs = factor(hard_drugs),
+        hard_drugs = recode_values(
+            hard_drugs,
+            0 ~ "No Hard Drug Use",
+            1 ~ "Hard Drug Use",
+            NA ~ NA_character_,
+            default = "Not Handled"
+        ),
         smoke_recode = recode_values(
             smoke,
             1 ~ "Never Smoked",
@@ -80,7 +88,7 @@ library(broom.mixed)
     # filter to baseline and year 2
     %>% filter(years %in% c(0, 2))
     %>% select(newid, timepoint, agg_ment, agg_phys, leu3n,
-               vload, hard_drugs, adh, age, bmi, smoke, educbas, race)
+               log_vload, hard_drugs, adh, age, bmi, smoke_recode, edu_recode, race_recode)
     %>% pivot_wider(
         id_cols = newid,
         names_from = timepoint,
@@ -90,12 +98,12 @@ library(broom.mixed)
     
     # calculate differences between baseline and year 2
     %>% mutate(
-        .keep = 'unused',
+        # .keep = 'unused',
         .after = newid,
         diff_agg_ment = agg_ment_2 - agg_ment_baseline,
         diff_agg_phys = agg_phys_2 - agg_phys_baseline,
         diff_leu3n = leu3n_2 - leu3n_baseline,
-        diff_log_vload = log10(vload_2) - log10(vload_baseline),
+        diff_log_vload = log_vload_2 - log_vload_baseline,
         adherence = adh_2
     )
     %>% select(-matches('_2'), -adh_baseline)
@@ -141,7 +149,7 @@ hiv_clean %>%
 
 ```{r}
 get_formula <- \(outcome) paste0(outcome, " ~
-                            hard_drugs_baseline + age_baseline + bmi_baseline + smoke_baseline + educbas_baseline + race_baseline")
+                            hard_drugs_baseline + age_baseline + bmi_baseline + smoke_recode_baseline + edu_recode_baseline + race_recode_baseline")
 
 # frequentist models
 agg_ment_mod_freq <- lm(get_formula("diff_leu3n"), data = hiv_clean)
