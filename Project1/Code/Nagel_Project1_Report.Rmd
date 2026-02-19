@@ -1,16 +1,15 @@
 ---
-title: ""
-author: ""
+title: "Project1"
+author: "Joe Nagel"
 date: ""
 output: pdf_document
 fontsize: 12pt
 mainfont: Helvetica
-number_sections: true
 geometry: margin=1in
 header-includes:
+  - \usepackage{float}
   - \usepackage{setspace}
   - \doublespacing
-  - \usepackage{float}
 ---
 
 ```{r setup, include=FALSE}
@@ -31,6 +30,7 @@ library(knitr)
 library(kableExtra)
 library(patchwork) 
 library(broom.mixed)
+library(brms)
 ```
 
 ```{r}
@@ -59,14 +59,14 @@ library(broom.mixed)
             4 ~ "<75%",
             NA ~ NA_character_,
             default = "Not Handled"
-        ),
+        ) %>% factor(levels = c("100%", "95-99%", "75-95%", "<75%")),
         hard_drugs = recode_values(
             hard_drugs,
             0 ~ "No Hard Drug Use",
             1 ~ "Hard Drug Use",
             NA ~ NA_character_,
             default = "Not Handled"
-        ),
+        ) %>% factor(levels = c("No Hard Drug Use", "Hard Drug Use")),
         smoke = recode_values(
             smoke,
             1 ~ "Never Smoked",
@@ -74,21 +74,21 @@ library(broom.mixed)
             3 ~ "Current Smoker",
             NA ~ NA_character_,
             default = "Not Handled"
-        ),
+        ) %>% factor(levels = c("Never Smoked", "Former Smoker", "Current Smoker")),
         race_recode = recode_values(
             race,
             1 ~ "Non-Hispanic White",
             2:8 ~ "Other",
             NA ~ NA_character_,
             default = "Not Handled"
-        ),
+        ) %>% factor(levels = c("Non-Hispanic White", "Other")),
         edu_recode = recode_values(
             educbas,
             1:4 ~ "No College Degree",
             5:7 ~ "College Degree or Greater",
             NA ~ NA_character_,
             default = "Not Handled"
-        )
+        ) %>% factor(levels = c("No College Degree", "College Degree or Greater"))
     )
     
     # hiv positive only
@@ -124,11 +124,10 @@ library(broom.mixed)
 ) -> hiv_clean
 ```
 
-```{r, include=TRUE}
+```{r}
 # create table 1
 table1 <- (
     hiv_clean
-    # %>% select(-c(matches("diff"), newid))
     %>% tbl_summary(
         by = hard_drugs_baseline,
         statistic = list(
@@ -136,7 +135,7 @@ table1 <- (
             all_categorical() ~ "{n} ({p}%)"
         ),
         missing = "ifany",
-        missing_text = "Missing",
+        missing_text = "Missing/Improbable, n (%)",
         missing_stat = "{N_miss} ({p_miss}%)",
         label = list(                              
             agg_ment_baseline   ~ "SF-36 Mental QoL, mean (SD)",
@@ -161,16 +160,91 @@ table1 <- (
             smoke_baseline,
             edu_recode_baseline,
             race_recode_baseline
-        )
+        ),
+        digits = list(all_continuous() ~ 1)
     )
     %>% add_overall(last = TRUE)
     %>% modify_footnote(everything() ~ NA)
-    %>% as_kable_extra(booktabs = TRUE)
+    %>% as_kable_extra(
+        booktabs = TRUE,
+        linesep = "",
+        caption = "Descriptive Statistics of Baseline Covariates and Year 2 Adherence",
+        escape = FALSE
+    )
+    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
 )
+```
 
+```{r, include = TRUE}
 table1
 ```
 
+```{r}
+names(hiv_clean)
+```
+
+```{r}
+# model formulas
+formula_ment <- diff_agg_ment ~
+    hard_drugs_baseline + agg_ment_baseline + age_baseline +
+    bmi_baseline + smoke_baseline + edu_recode_baseline + race_recode_baseline
+
+formula_phys <- diff_agg_phys ~
+    hard_drugs_baseline + agg_phys_baseline + age_baseline +
+    bmi_baseline + smoke_baseline + edu_recode_baseline + race_recode_baseline
+
+formula_vload <- diff_log_vload ~
+    hard_drugs_baseline + log_vload_baseline + age_baseline +
+    bmi_baseline + smoke_baseline + edu_recode_baseline + race_recode_baseline
+
+formula_leu3n <- diff_leu3n ~
+    hard_drugs_baseline + leu3n_baseline + age_baseline +
+    bmi_baseline + smoke_baseline + edu_recode_baseline + race_recode_baseline
+```
+
+
+```{r}
+# frequentist models
+fmod_ment <- lm(formula_ment, data = hiv_clean)
+fmod_phys <- lm(formula_phys, data = hiv_clean)
+fmod_vload <- lm(formula_vload, data = hiv_clean)
+fmod_leu3n <- lm(formula_leu3n, data = hiv_clean)
+```
+
+```{r}
+# Bayesian setup
+fit_brm <- function(formula, data) {
+    priors <- c(
+        set_prior("normal(0, 100)", class = "Intercept"), # prior for interept
+        set_prior("normal(0, 100)", class = "b"), # priors for fixed effects
+        set_prior("normal(0, 100)", class = "sigma", lb = 0) # prior for sigma
+    )
+    chains <- 4
+    iter <- 5000
+    warmup <- 1000
+    seed <- 4130
+    cores <- 4
+    
+    model <- brm(
+        formula = formula,
+        data = data,
+        family = gaussian(),
+        prior = priors,
+        chains = chains,
+        iter = iter,
+        warmup = warmup,
+        seed = seed,
+        cores = cores
+    )
+    
+    return(model)
+}
+```
+
+
+```{r}
+bmod_leu3n <- fit_brm(formula = formula_leu3n, data = hiv_clean)
+```
 
 
 ```{r}
@@ -185,10 +259,6 @@ hiv_clean %>%
        y = "Change from Baseline")
 ```
 
-
-
-# Project 1
-## Joe Nagel
 
 # Introduction
 
