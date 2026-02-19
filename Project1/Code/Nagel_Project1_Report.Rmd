@@ -51,6 +51,9 @@ library(broom.mixed)
         agg_ment = if_else(agg_ment < 0, NA_real_, agg_ment),
         bmi = if_else(bmi %in% c(-1, 999), NA_real_, bmi),
         timepoint = if_else(years == 0, 'baseline', as.character(years)),
+        # adh = recode_values(
+        #     adh
+        # )
         hard_drugs = recode_values(
             hard_drugs,
             0 ~ "No Hard Drug Use",
@@ -58,7 +61,7 @@ library(broom.mixed)
             NA ~ NA_character_,
             default = "Not Handled"
         ),
-        smoke_recode = recode_values(
+        smoke = recode_values(
             smoke,
             1 ~ "Never Smoked",
             2 ~ "Former Smoker",
@@ -88,7 +91,7 @@ library(broom.mixed)
     # filter to baseline and year 2
     %>% filter(years %in% c(0, 2))
     %>% select(newid, timepoint, agg_ment, agg_phys, leu3n,
-               log_vload, hard_drugs, adh, age, bmi, smoke_recode, edu_recode, race_recode)
+               log_vload, hard_drugs, adh, age, bmi, smoke, edu_recode, race_recode)
     %>% pivot_wider(
         id_cols = newid,
         names_from = timepoint,
@@ -104,25 +107,55 @@ library(broom.mixed)
         diff_agg_phys = agg_phys_2 - agg_phys_baseline,
         diff_leu3n = leu3n_2 - leu3n_baseline,
         diff_log_vload = log_vload_2 - log_vload_baseline,
-        adherence = adh_2
+        adh = adh_2
     )
     %>% select(-matches('_2'), -adh_baseline)
     
-    ## keep only participants with all outcomes at 0 and 2 years
+    # keep only participants with all outcomes at 0 and 2 years
     %>% filter(!if_any(matches('diff'), is.na))
 ) -> hiv_clean
 ```
 
-```{r}
-hiv_clean
+```{r, include=TRUE}
+# create table 1
+table1 <- (
+    hiv_clean
+    # %>% select(-c(matches("diff"), newid))
+    %>% tbl_summary(
+        by = hard_drugs_baseline,
+        statistic = list(
+            all_continuous() ~ "{mean} ({sd})",
+            all_categorical() ~ "{n} ({p}%)"
+        ),
+        missing = "always",
+        missing_text = "Missing",
+        missing_stat = "{N_miss} ({p_miss}%)",
+        label = list(                              
+            agg_ment_baseline   ~ "SF-36 Mental QoL",
+            agg_phys_baseline   ~ "SF_36 Physical QoL",
+            leu3n_baseline      ~ "CD4 Count",
+            log_vload_baseline  ~ "Log Viral Load",
+            adh                 ~ "Adherence",
+            bmi_baseline        ~ "BMI",
+            smoke_baseline      ~ "Smoking",
+            edu_recode_baseline ~ "Education",
+            race_recode_baseline~ "Race/Ethnicity"
+        ),
+        include = -c(matches("diff"), newid)
+    )
+    %>% add_overall(last = TRUE)
+    %>% add_n()
+    %>% as_kable()
+)
+table1
 ```
+
 
 
 ```{r}
 hiv_clean %>%
   # Pivot the difference columns longer so we can plot them all at once
   pivot_longer(cols = starts_with("diff"), names_to = "outcome", values_to = "change") %>%
-  
   ggplot(aes(x = hard_drugs_baseline, y = change, fill = hard_drugs_baseline)) +
   geom_boxplot(na.rm = TRUE) +
   facet_wrap(~outcome, scales = "free_y") +
@@ -132,45 +165,13 @@ hiv_clean %>%
 ```
 
 
-```{r}
-(
-    hiv_clean
-    %>% select(matches("diff"), hard_drugs_baseline)
-    %>% mutate(missing = if_any(everything(), is.na))
-    %>% summarise(
-        .by = hard_drugs_baseline,
-        missing = mean(missing),
-        n()
-    )
-)
-```
-
-
-
-```{r}
-get_formula <- \(outcome) paste0(outcome, " ~
-                            hard_drugs_baseline + age_baseline + bmi_baseline + smoke_recode_baseline + edu_recode_baseline + race_recode_baseline")
-
-# frequentist models
-agg_ment_mod_freq <- lm(get_formula("diff_leu3n"), data = hiv_clean)
-summary(agg_ment_mod_freq)
-```
-
-```{r}
-plot(agg_ment_mod_freq)
-```
-
-
-```{r}
-hist(hiv_clean$diff_leu3n)
-```
 
 # Project 1
 ## Joe Nagel
 
 # Introduction
 
-HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and quality of life measurements on men infected with HIV. Data was collected on subjects at the begining of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to charaterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in aggregate physical quality of life score, aggregate mental quality of life score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for age, bmi, smoking status, education, and race. We will compare Bayesian and non-Bayesian analysis approaches.
+HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and quality of life measurements on men infected with HIV. Data was collected on subjects at the begining of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to charaterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in aggregate physical quality of life score, aggregate mental quality of life score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for age, bmi, smoking status, education, and race. We will compare Bayesian and non-Bayesian analysis approaches. Additionally, we will investigate if any significant differences across drug use are explained by study protocol adherence.
 
 # Preliminary Methods
 
