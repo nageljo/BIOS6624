@@ -49,11 +49,17 @@ library(broom.mixed)
     %>% mutate(
         log_vload = log10(vload),
         agg_ment = if_else(agg_ment < 0, NA_real_, agg_ment),
-        bmi = if_else(bmi %in% c(-1, 999), NA_real_, bmi),
+        bmi = if_else(bmi < 0 | 400 <= bmi, NA_real_, bmi),
         timepoint = if_else(years == 0, 'baseline', as.character(years)),
-        # adh = recode_values(
-        #     adh
-        # )
+        adh = recode_values(
+            adh,
+            1 ~ "100%",
+            2 ~ "95-99%",
+            3 ~ "75-95%",
+            4 ~ "<75%",
+            NA ~ NA_character_,
+            default = "Not Handled"
+        ),
         hard_drugs = recode_values(
             hard_drugs,
             0 ~ "No Hard Drug Use",
@@ -90,8 +96,10 @@ library(broom.mixed)
     
     # filter to baseline and year 2
     %>% filter(years %in% c(0, 2))
-    %>% select(newid, timepoint, agg_ment, agg_phys, leu3n,
-               log_vload, hard_drugs, adh, age, bmi, smoke, edu_recode, race_recode)
+    %>% select(
+        newid, timepoint, agg_ment, agg_phys, leu3n, log_vload,
+        hard_drugs, adh, age, bmi, smoke, edu_recode, race_recode
+    )
     %>% pivot_wider(
         id_cols = newid,
         names_from = timepoint,
@@ -127,26 +135,39 @@ table1 <- (
             all_continuous() ~ "{mean} ({sd})",
             all_categorical() ~ "{n} ({p}%)"
         ),
-        missing = "always",
+        missing = "ifany",
         missing_text = "Missing",
         missing_stat = "{N_miss} ({p_miss}%)",
         label = list(                              
-            agg_ment_baseline   ~ "SF-36 Mental QoL",
-            agg_phys_baseline   ~ "SF_36 Physical QoL",
-            leu3n_baseline      ~ "CD4 Count",
-            log_vload_baseline  ~ "Log Viral Load",
-            adh                 ~ "Adherence",
-            bmi_baseline        ~ "BMI",
-            smoke_baseline      ~ "Smoking",
-            edu_recode_baseline ~ "Education",
-            race_recode_baseline~ "Race/Ethnicity"
+            agg_ment_baseline   ~ "SF-36 Mental QoL, mean (SD)",
+            agg_phys_baseline   ~ "SF-36 Physical QoL, mean (SD)",
+            leu3n_baseline      ~ "CD4+ T Cell Count, mean (SD)",
+            log_vload_baseline  ~ "Log Viral Load, mean (SD)",
+            adh                 ~ "Adherence, n (%)",
+            age_baseline        ~ "Age (Years), mean (SD)",
+            bmi_baseline        ~ "BMI, mean (SD)",
+            smoke_baseline      ~ "Smoking Status, n (%)",
+            edu_recode_baseline ~ "Education, n (%)",
+            race_recode_baseline~ "Race/Ethnicity, n (%)"
         ),
-        include = -c(matches("diff"), newid)
+        include = c(
+            agg_ment_baseline,
+            agg_phys_baseline,
+            leu3n_baseline,
+            log_vload_baseline,
+            age_baseline,
+            bmi_baseline,
+            adh,
+            smoke_baseline,
+            edu_recode_baseline,
+            race_recode_baseline
+        )
     )
     %>% add_overall(last = TRUE)
-    %>% add_n()
-    %>% as_kable()
+    %>% modify_footnote(everything() ~ NA)
+    %>% as_kable_extra(booktabs = TRUE)
 )
+
 table1
 ```
 
