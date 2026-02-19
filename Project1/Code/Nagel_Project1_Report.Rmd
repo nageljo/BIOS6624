@@ -46,12 +46,33 @@ library(broom.mixed)
 (
     hiv
     # remove bad bmi values
-    %>% mutate(bmi = if_else(bmi %in% c(-1, 999), NA_real_, bmi),
-               timepoint = if_else(years == 0, 'baseline', as.character(years)),
-               educbas = factor(educbas),
-               race = factor(race),
-               smoke = factor(smoke),
-               hard_drugs = factor(hard_drugs))
+    %>% mutate(
+        bmi = if_else(bmi %in% c(-1, 999), NA_real_, bmi),
+        timepoint = if_else(years == 0, 'baseline', as.character(years)),
+        hard_drugs = factor(hard_drugs),
+        smoke_recode = recode_values(
+            smoke,
+            1 ~ "Never Smoked",
+            2 ~ "Former Smoker",
+            3 ~ "Current Smoker",
+            NA ~ NA_character_,
+            default = "Not Handled"
+        ),
+        race_recode = recode_values(
+            race,
+            1 ~ "Non-Hispanic White",
+            2:8 ~ "Other",
+            NA ~ NA_character_,
+            default = "Not Handled"
+        ),
+        edu_recode = recode_values(
+            educbas,
+            1:4 ~ "No College Degree",
+            5:7 ~ "College Degree or Greater",
+            NA ~ NA_character_,
+            default = "Not Handled"
+        )
+    )
     
     # hiv positive only
     %>% filter(hivpos == 1)
@@ -77,9 +98,17 @@ library(broom.mixed)
         diff_log_vload = log10(vload_2) - log10(vload_baseline),
         adherence = adh_2
     )
-    %>% select(-matches('_2'))
+    %>% select(-matches('_2'), -adh_baseline)
+    
+    ## keep only participants with all outcomes at 0 and 2 years
+    %>% filter(!if_any(matches('diff'), is.na))
 ) -> hiv_clean
 ```
+
+```{r}
+hiv_clean
+```
+
 
 ```{r}
 hiv_clean %>%
