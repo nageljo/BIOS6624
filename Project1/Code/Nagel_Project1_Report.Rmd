@@ -31,6 +31,10 @@ library(kableExtra)
 library(patchwork) 
 library(broom.mixed)
 library(brms)
+library(loo)
+library(posterior)
+library(bayestestR)
+
 ```
 
 ```{r}
@@ -117,12 +121,31 @@ library(brms)
         diff_log_vload = log_vload_2 - log_vload_baseline,
         adh = adh_2
     )
-    # %>% select(-matches('_2'), -adh_baseline)
+    %>% select(-matches('_2'), -adh_baseline)
     
     # keep only participants with all outcomes at 0 and 2 years
-    %>% filter(!if_any(matches('diff'), is.na))
+    # %>% filter(!if_any(matches('diff'), is.na))
 ) -> hiv_clean
 ```
+
+```{r}
+(
+    hiv_clean
+    %>% mutate(
+        missing = if_any(matches("diff"), is.na)
+    )
+    %>% summarise(
+        .by = c(hard_drugs_baseline, missing),
+        n = n()
+    )
+    %>% group_by(hard_drugs_baseline)
+    %>% mutate(
+        prop = n/sum(n)
+    )
+    %>% arrange(hard_drugs_baseline, missing)
+)
+```
+
 
 ```{r}
 # create table 1
@@ -169,14 +192,14 @@ table1 <- (
         booktabs = TRUE,
         linesep = "",
         caption = "Descriptive Statistics of Baseline Covariates and Year 2 Adherence",
-        escape = FALSE
+        escape = TRUE
     )
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
 )
 ```
 
 ```{r, include = TRUE}
-# table1
+table1
 ```
 
 ```{r}
@@ -214,7 +237,7 @@ summary(fmod_vload)
 
 ```{r}
 # Bayesian setup
-fit_brm <- function(formula, data, file) {
+fit_brm <- function(formula, data, file = NULL) {
     # define priors and MCMC parameters
     priors <- c(
         set_prior("normal(0, 100)", class = "Intercept"),    # prior for intercept
@@ -256,7 +279,7 @@ fit_brm <- function(formula, data, file) {
 ```
 
 ```{r}
-# fit Bayesiam models
+# fit Bayesian models
 bmod_ment <- fit_brm(formula = formula_ment, data = hiv_clean, file = "../Models/bmod_ment")
 bmod_phys <- fit_brm(formula = formula_phys, data = hiv_clean, file = "../Models/bmod_phys")
 bmod_vload <- fit_brm(formula = formula_vload, data = hiv_clean, file = "../Models/bmod_vload")
@@ -264,11 +287,163 @@ bmod_leu3n <- fit_brm(formula = formula_leu3n, data = hiv_clean, file = "../Mode
 ```
 
 ```{r}
-summary(bmod_leu3n)
+# Find the exact coefficient name for hard_drugs_baseline (handles e.g., 0/1 or factor coding)
+find_term_name <- function(coef_names, var = "hard_drugs_baseline") {
+  hits <- grep(paste0("^", var, "($|[^:])"), coef_names, value = TRUE)
+  if (length(hits) == 0) {
+    stop(sprintf("Could not find coefficient for '%s' in: %s",
+                 var, paste(coef_names, collapse = ", ")))
+  }
+  if (length(hits) > 1) {
+    message(sprintf("Multiple matches for '%s': using '%s'", var, hits[1]))
+  }
+  hits[1]
+}
+
+# Frequentist: estimate, 95% CI, p-value for hard_drugs_baseline
+extract_lm_stats <- function(fit, var = "hard_drugs_baseline") {
+  term <- find_term_name(names(coef(fit)), var)
+  ci   <- confint(fit, level = 0.95)
+  est  <- coef(fit)[term]
+  lcl  <- ci[term, 1]
+  ucl  <- ci[term, 2]
+  pval <- summary(fit)$coefficients[term, "Pr(>|t|)"]
+  list(estimate = est, lcl = lcl, ucl = ucl, p = pval)
+}
+
+# Bayesian: posterior mean & 95% HDI for hard_drugs_baseline
+extract_brm_stats_hdi <- function(fit, var = "hard_drugs_baseline", cred = 0.95) {
+  # Use posterior draws; column names are "b_<term>"
+  draws <- as_draws_df(fit)
+  # fixef names
+  fx_names <- dimnames(brms::fixef(fit))[[1]]
+  term     <- find_term_name(fx_names, var)
+  col_name <- paste0("b_", term)
+
+  if (!col_name %in% names(draws)) {
+    stop(sprintf("Could not find draws column '%s' in posterior draws.", col_name))
+  }
+
+  est <- mean(draws[[col_name]])
+  hdi_ci <- bayestestR::hdi(draws[[col_name]], ci = cred)
+  lcl <- hdi_ci$CI_low
+  ucl <- hdi_ci$CI_high
+  list(estimate = est, lcl = lcl, ucl = ucl)
+}
+
+# Compute ΔLOOIC for the hard_drugs term: LOOIC(reduced) - LOOIC(full)
+# Uses reloo=TRUE to stabilize if PSIS has high Pareto-k
+delta_loo_for_term <- function(full_fit, full_formula, var = "hard_drugs_baseline") {
+  # Build reduced formula by removing the term
+  reduced_formula <- reformulate(
+    termlabels = setdiff(attr(terms(full_formula), "term.labels"), var),
+    response   = as.character(formula(full_formula)[[2]])
+  )
+
+  # Fit reduced model based on full; update() preserves prior, backend, etc.
+  reduced_fit <- update(
+    full_fit,
+    formula    = reduced_formula,
+    recompile  = TRUE,
+    refresh    = 0,
+    seed       = 4130
+  )
+
+  # Add PSIS-LOO criteria; use reloo for stability if needed
+  full_fit    <- brms::add_criterion(full_fit,    "loo", reloo = TRUE)
+  reduced_fit <- brms::add_criterion(reduced_fit, "loo", reloo = TRUE)
+
+  loo_full <- full_fit$criteria$loo
+  loo_red  <- reduced_fit$criteria$loo
+
+  # LOOIC = -2 * elpd_loo
+  looic_full <- loo_full$estimates["looic","Estimate"]
+  looic_red  <- loo_red$estimates["looic","Estimate"]
+
+  delta    <- as.numeric(looic_red - looic_full)
+  se_full  <- loo_full$estimates["looic","SE"]
+  se_red   <- loo_red$estimates["looic","SE"]
+  se_delta <- sqrt(se_full^2 + se_red^2)
+
+  list(delta_looic = delta, se = se_delta)
+}
+
+# Helper to pretty format numbers
+fmt <- function(x, digits = 2) formatC(x, format = "f", digits = digits)
 ```
 
 ```{r}
-summary(fmod_vload)
+# Named list to iterate across outcomes (for labeling rows)
+row_labels <- c(
+  "SF-36 Mental QoL"   = "diff_agg_ment",
+  "SF-36 Physical QoL" = "diff_agg_phys",
+  "CD4+ T Cell Count"  = "diff_leu3n",
+  "Log Viral Load"     = "diff_log_vload"
+)
+
+# Collect models in parallel lists (order must match row_labels)
+fmods  <- list(fmod_ment, fmod_phys, fmod_leu3n, fmod_vload)
+bmods  <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload)
+fforms <- list(formula_ment, formula_phys, formula_leu3n, formula_vload)
+
+table2 <- (
+    pmap_dfr(
+        list(names(row_labels), fmods, bmods, fforms),
+        function(outcome_label, ffit, bfit, fform) {
+            # Frequentist
+            fr <- extract_lm_stats(ffit, "hard_drugs_baseline")
+            fr_ci <- sprintf("[%s, %s]", fmt(fr$lcl), fmt(fr$ucl))
+            p_str <- if (fr$p < 0.001) "<0.001" else fmt(fr$p, digits = 3)
+            
+            # Bayesian with HDI
+            br <- extract_brm_stats_hdi(bfit, "hard_drugs_baseline", cred = 0.95)
+            br_ci <- sprintf("[%s, %s]", fmt(br$lcl), fmt(br$ucl))
+            
+            # ΔLOOIC (full vs reduced)
+            dL <- delta_loo_for_term(bfit, fform, "hard_drugs_baseline")
+            
+            tibble::tibble(
+                Outcome                  = outcome_label,
+                `Frequentist Estimate`   = as.numeric(fr$estimate),
+                `Frequentist 95% CI`     = fr_ci,
+                `p-value`                = p_str,
+                `Bayesian Estimate`      = as.numeric(br$estimate),
+                `Bayesian 95% HDI`       = br_ci,
+                `delta LOOIC`            = as.numeric(dL$delta_looic)
+                # Optionally: `SE delta LOOIC` = as.numeric(dL$se)
+            )
+        }
+    )
+    %>% mutate(
+        `Frequentist Estimate` = as.numeric(fmt(`Frequentist Estimate`)),
+        `Bayesian Estimate`    = as.numeric(fmt(`Bayesian Estimate`)),
+        `delta LOOIC`          = as.numeric(fmt(`delta LOOIC`, digits = 2))
+    )
+    %>% kable(
+        booktabs = TRUE,
+        linesep  = "",
+        caption  = "Frequentist and Bayesian Model Results for Hard Drug Use Effect",
+        align    = "lcccccc",
+        escape   = TRUE,
+        col.names = c("Outcome", "Estimate", "95% CI", "p-value",
+                      "Estimate", "95% HDI", "delta LOO-IC")
+    )
+    %>% add_header_above(
+        c(" " = 1, "Frequentist" = 3, "Bayesian" = 3),
+        bold = TRUE
+    )
+    %>% kable_styling(latex_options = c("HOLD_position"))
+)
+```
+
+
+```{r, include=TRUE}
+table2
+```
+
+
+```{r}
+summary(fmod_leu3n)
 ```
 
 
@@ -287,8 +462,12 @@ hiv_clean %>%
 
 # Introduction
 
-HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and quality of life measurements on men infected with HIV. Data was collected on subjects at the begining of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to charaterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in aggregate physical quality of life score, aggregate mental quality of life score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for age, bmi, smoking status, education, and race. We will compare Bayesian and non-Bayesian analysis approaches. Additionally, we will investigate if any significant differences across drug use are explained by study protocol adherence.
+HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and quality of life measurements from the 36-Item Short Form Health Survey (SF-36) on men infected with HIV. Data was collected on subjects at the beginning of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to characterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in SF-36 Mental Component Summary (MCS) score, SF-36 Physical Component Summary (PCS) score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for baseline outcomes, age, bmi, smoking status, education, and race. Additionally, we will investigate if any significant differences across drug use are explained by study protocol adherence. 
 
 # Preliminary Methods
 
-We will begin by checking the analysis variables for missingness and outliers; we will specifically check if missingness differs between hard drug users and non-hard drug uses. We will calculate the change in outcomes as the value at Year 2 minus the value at Year 0. We will also visualize the distributions of the four outcome difference scores using histograms and boxplots to identify potential outliers and assess the need for any transformations prior to analysis. For the primary analysis, we will generate descriptive statistics to compare baseline demographic and clinical characteristics between those who reported hard drug use and those who did not. To evaluate the effect of baseline hard drug use on treatment response, we will fit four separate multivariable linear regression models—one for each outcome (change in aggregate physical score, aggregate mental score, CD4+ count, and viral load). The primary predictor of interest will be baseline hard drug use status. All models will adjust for the specified demographic variables: age, BMI, smoking status, education, and race. We will approach modeling from both a Bayesian and non-Bayesian approach. For the non-Bayesian, we will use standard Ordinary Least Squares (OLS) regression, reporting point estimates, 95% confidence intervals, and p-values. For the Bayesian, we will fit Bayesian linear regression models. We will specify non-informative or weakly informative prior distributions for our parameters and estimate posterior distributions using Markov Chain Monte Carlo (MCMC) methods. We will report posterior means, 95% Highest Posterior Density (HPD) credible intervals, and posterior probabilities to evaluate the primary research question. We will compare the results from both frameworks and determine if there are any differences in the interpretations. Finally, we will investigate if any relationship between hard drug use and the outcomes is explained by adherence to the treatment protocol.
+We will begin by checking the analysis variables for missingness and outliers; we will specifically check if missingness differs between hard drug users and non-hard drug uses. We will calculate the change in outcomes as the value at Year 2 minus the value at Year 0. We will also visualize the distributions of the four outcome difference scores using histograms and boxplots to identify potential outliers and assess the need for any transformations prior to analysis. For the primary analysis, we will generate descriptive statistics to compare baseline demographic and clinical characteristics between those who reported hard drug use and those who did not. To evaluate the effect of baseline hard drug use on treatment response, we will fit four separate multivariable linear regression models—one for each outcome (change in PCS, MCS, CD4+ count, and viral load). The primary predictor of interest will be baseline hard drug use status. All models will adjust for the specified demographic variables: age, BMI, smoking status, education, and race. We will approach modeling from both a Bayesian and non-Bayesian approach. For the non-Bayesian, we will use standard Ordinary Least Squares (OLS) regression, reporting point estimates, 95% confidence intervals, and p-values. For the Bayesian, we will fit Bayesian linear regression models. We will specify non-informative or weakly informative prior distributions for our parameters and estimate posterior distributions using Markov Chain Monte Carlo (MCMC) methods. We will report posterior means, 95% Highest Posterior Density (HPD) credible intervals, and posterior probabilities to evaluate the primary research question. We will compare the results from both frameworks and determine if there are any differences in the interpretations. Finally, we will investigate if any relationship between hard drug use and the outcomes is explained by adherence to the treatment protocol.
+
+# Methods
+
+This analysis only considered subjects with all outcomes (PCS, MCS, CD4+ count, and viral load) measured at both baseline and two years. We assessed if missingness in the outcomes differed between hard drug users and non hard drug users. Due to low sample sizes within groups, Race/Ethnicity was combined into Non-Hispanic White and Other and Education was combined into No College Degree and College Degree or Greater. Outlier BMI measurements ($999$ (insufficient data), $-1$ (improbable value), and any biologically improbable values (BMI $<0$ or $>400$)) were excluded from the analysis. Additionally, viral load was analysed on the $\log_{10}$ scale 
