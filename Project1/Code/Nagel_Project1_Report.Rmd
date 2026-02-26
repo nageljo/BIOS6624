@@ -57,13 +57,20 @@ library(bayestestR)
         timepoint = if_else(years == 0, 'baseline', as.character(years)),
         adh = recode_values(
             adh,
-            1 ~ "100%",
-            2 ~ "95-99%",
-            3 ~ "75-95%",
-            4 ~ "<75%",
+            1:2 ~ ">95%",
+            3:4 ~ "<95%",
             NA ~ NA_character_,
             default = "Not Handled"
-        ) %>% factor(levels = c("100%", "95-99%", "75-95%", "<75%")),
+        ) %>% factor(levels = c(">95%", "<95%")),
+        # adh = recode_values(
+        #     adh,
+        #     1 ~ "100%",
+        #     2 ~ "95-99%",
+        #     3 ~ "75-95%",
+        #     4 ~ "<75%",
+        #     NA ~ NA_character_,
+        #     default = "Not Handled"
+        # ) %>% factor(levels = c("100%", "95-99%", "75-95%", "<75%")),
         hard_drugs = recode_values(
             hard_drugs,
             0 ~ "No Hard Drug Use",
@@ -73,12 +80,11 @@ library(bayestestR)
         ) %>% factor(levels = c("No Hard Drug Use", "Hard Drug Use")),
         smoke = recode_values(
             smoke,
-            1 ~ "Never Smoked",
-            2 ~ "Former Smoker",
+            1:2 ~ "Never/Former Smoker",
             3 ~ "Current Smoker",
             NA ~ NA_character_,
             default = "Not Handled"
-        ) %>% factor(levels = c("Never Smoked", "Former Smoker", "Current Smoker")),
+        ) %>% factor(levels = c("Never/Former Smoker", "Current Smoker")),
         race_recode = recode_values(
             race,
             1 ~ "Non-Hispanic White",
@@ -124,7 +130,7 @@ library(bayestestR)
     %>% select(-matches('_2'), -adh_baseline)
     
     # keep only participants with all outcomes at 0 and 2 years
-    # %>% filter(!if_any(matches('diff'), is.na))
+    %>% filter(!if_any(matches('diff'), is.na))
 ) -> hiv_clean
 ```
 
@@ -161,16 +167,16 @@ table1 <- (
         missing_text = "Missing/Improbable, n (%)",
         missing_stat = "{N_miss} ({p_miss}%)",
         label = list(                              
-            agg_ment_baseline   ~ "SF-36 Mental QoL, mean (SD)",
-            agg_phys_baseline   ~ "SF-36 Physical QoL, mean (SD)",
-            leu3n_baseline      ~ "CD4+ T Cell Count, mean (SD)",
-            log_vload_baseline  ~ "Log Viral Load, mean (SD)",
-            adh                 ~ "Adherence, n (%)",
-            age_baseline        ~ "Age (Years), mean (SD)",
-            bmi_baseline        ~ "BMI, mean (SD)",
-            smoke_baseline      ~ "Smoking Status, n (%)",
-            edu_recode_baseline ~ "Education, n (%)",
-            race_recode_baseline~ "Race/Ethnicity, n (%)"
+            agg_ment_baseline    ~ "SF-36 Mental QoL, mean (SD)",
+            agg_phys_baseline    ~ "SF-36 Physical QoL, mean (SD)",
+            leu3n_baseline       ~ "CD4+ T Cell Count, mean (SD)",
+            log_vload_baseline   ~ "Log Viral Load, mean (SD)",
+            adh                  ~ "Adherence, n (%)",
+            age_baseline         ~ "Age (Years), mean (SD)",
+            bmi_baseline         ~ "BMI, mean (SD)",
+            smoke_baseline       ~ "Smoking Status, n (%)",
+            edu_recode_baseline  ~ "Education, n (%)",
+            race_recode_baseline ~ "Race/Ethnicity, n (%)"
         ),
         include = c(
             agg_ment_baseline,
@@ -184,7 +190,10 @@ table1 <- (
             edu_recode_baseline,
             race_recode_baseline
         ),
-        digits = list(all_continuous() ~ 1)
+        # digits = list(
+        #     all_continuous() ~ 1
+        #     # all_categorical() ~ 1
+        # )
     )
     %>% add_overall(last = TRUE)
     %>% modify_footnote(everything() ~ NA)
@@ -220,7 +229,6 @@ formula_leu3n <- diff_leu3n ~
     hard_drugs_baseline + leu3n_baseline + age_baseline +
     bmi_baseline + smoke_baseline + edu_recode_baseline + race_recode_baseline
 ```
-
 
 ```{r}
 # frequentist models
@@ -285,6 +293,31 @@ bmod_phys <- fit_brm(formula = formula_phys, data = hiv_clean, file = "../Models
 bmod_vload <- fit_brm(formula = formula_vload, data = hiv_clean, file = "../Models/bmod_vload")
 bmod_leu3n <- fit_brm(formula = formula_leu3n, data = hiv_clean, file = "../Models/bmod_leu3n")
 ```
+
+```{r}
+# fit Bayesian models without hard drug term
+bmod_ment_red <- fit_brm(
+    formula = update(formula_ment, . ~ . - hard_drugs_baseline),
+    data = hiv_clean,
+    file = "../Models/bmod_ment_red"
+)
+bmod_phys_red <- fit_brm(
+    formula = update(formula_phys, . ~ . - hard_drugs_baseline),
+    data = hiv_clean,
+    file = "../Models/bmod_phys_red"
+)
+bmod_vload_red <- fit_brm(
+    formula = update(formula_vload, . ~ . - hard_drugs_baseline),
+    data = hiv_clean,
+    file = "../Models/bmod_vload_red"
+)
+bmod_leu3n_red <- fit_brm(
+    formula = update(formula_leu3n, . ~ . - hard_drugs_baseline),
+    data = hiv_clean,
+    file = "../Models/bmod_leu3n_red"
+)
+```
+
 
 ```{r}
 # Find the exact coefficient name for hard_drugs_baseline (handles e.g., 0/1 or factor coding)
@@ -471,3 +504,6 @@ We will begin by checking the analysis variables for missingness and outliers; w
 # Methods
 
 This analysis only considered subjects with all outcomes (PCS, MCS, CD4+ count, and viral load) measured at both baseline and two years. We assessed if missingness in the outcomes differed between hard drug users and non hard drug users. Due to low sample sizes within groups, Race/Ethnicity was combined into Non-Hispanic White and Other and Education was combined into No College Degree and College Degree or Greater. Outlier BMI measurements ($999$ (insufficient data), $-1$ (improbable value), and any biologically improbable values (BMI $<0$ or $>400$)) were excluded from the analysis. Additionally, viral load was analysed on the $\log_{10}$ scale 
+
+
+i could be that hard drug users have better adherence bc the ones that dont have good adherence did not have measurements at year 2
