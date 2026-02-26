@@ -18,6 +18,7 @@ knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
 
 ```{r}
 # read in packages
+source("functions.R")
 library(tidyverse)
 library(naniar)
 library(janitor)
@@ -34,7 +35,6 @@ library(brms)
 library(loo)
 library(posterior)
 library(bayestestR)
-
 ```
 
 ```{r}
@@ -62,15 +62,6 @@ library(bayestestR)
             NA ~ NA_character_,
             default = "Not Handled"
         ) %>% factor(levels = c(">95%", "<95%")),
-        # adh = recode_values(
-        #     adh,
-        #     1 ~ "100%",
-        #     2 ~ "95-99%",
-        #     3 ~ "75-95%",
-        #     4 ~ "<75%",
-        #     NA ~ NA_character_,
-        #     default = "Not Handled"
-        # ) %>% factor(levels = c("100%", "95-99%", "75-95%", "<75%")),
         hard_drugs = recode_values(
             hard_drugs,
             0 ~ "No Hard Drug Use",
@@ -167,8 +158,8 @@ table1 <- (
         missing_text = "Missing/Improbable, n (%)",
         missing_stat = "{N_miss} ({p_miss}%)",
         label = list(                              
-            agg_ment_baseline    ~ "SF-36 Mental QoL, mean (SD)",
-            agg_phys_baseline    ~ "SF-36 Physical QoL, mean (SD)",
+            agg_ment_baseline    ~ "SF-36 MCS, mean (SD)",
+            agg_phys_baseline    ~ "SF-36 PCS, mean (SD)",
             leu3n_baseline       ~ "CD4+ T Cell Count, mean (SD)",
             log_vload_baseline   ~ "Log Viral Load, mean (SD)",
             adh                  ~ "Adherence, n (%)",
@@ -190,10 +181,10 @@ table1 <- (
             edu_recode_baseline,
             race_recode_baseline
         ),
-        # digits = list(
-        #     all_continuous() ~ 1
-        #     # all_categorical() ~ 1
-        # )
+        digits = list(
+            all_continuous() ~ 1
+            # all_categorical() ~ 1
+        )
     )
     %>% add_overall(last = TRUE)
     %>% modify_footnote(everything() ~ NA)
@@ -239,51 +230,11 @@ fmod_leu3n <- lm(formula_leu3n, data = hiv_clean)
 ```
 
 ```{r}
-summary(fmod_vload)
-```
-
-
-```{r}
-# Bayesian setup
-fit_brm <- function(formula, data, file = NULL) {
-    # define priors and MCMC parameters
-    priors <- c(
-        set_prior("normal(0, 100)", class = "Intercept"),    # prior for intercept
-        set_prior("normal(0, 100)", class = "b"),            # priors for fixed effects
-        set_prior("normal(0, 100)", class = "sigma", lb = 0) # prior for sigma
-    )
-    chains <- 4
-    iter <- 2000
-    warmup <- 1000
-    
-    # create the required directories to store the model if they do not exist
-    if (!is.null(file)) {
-        out_dir <- dirname(file)
-        if (!identical(out_dir, ".") && !dir.exists(out_dir)) {
-            dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-        }
-    }
-
-    # fit the model
-    model <- brm(
-        formula = formula,
-        data = data,
-        file = file,
-        prior = priors,
-        chains = chains,
-        iter = iter,
-        warmup = warmup,
-        file_refit = "on_change",
-        family = gaussian(),
-        seed = 4130,
-        cores = 4,
-        backend = "cmdstanr",
-        refresh = 0,
-        silent = 2
-    )
-    
-    return(model)
-}
+# frequentist models with adherence
+fmod_ment <- lm(update(formula_ment, . ~ . + adh), data = hiv_clean)
+fmod_phys <- lm(update(formula_phys, . ~ . + adh), data = hiv_clean)
+fmod_vload <- lm(update(formula_vload, . ~ . + adh), data = hiv_clean)
+fmod_leu3n <- lm(update(formula_leu3n, . ~ . + adh), data = hiv_clean)
 ```
 
 ```{r}
@@ -318,160 +269,97 @@ bmod_leu3n_red <- fit_brm(
 )
 ```
 
-
 ```{r}
-# Find the exact coefficient name for hard_drugs_baseline (handles e.g., 0/1 or factor coding)
-find_term_name <- function(coef_names, var = "hard_drugs_baseline") {
-  hits <- grep(paste0("^", var, "($|[^:])"), coef_names, value = TRUE)
-  if (length(hits) == 0) {
-    stop(sprintf("Could not find coefficient for '%s' in: %s",
-                 var, paste(coef_names, collapse = ", ")))
-  }
-  if (length(hits) > 1) {
-    message(sprintf("Multiple matches for '%s': using '%s'", var, hits[1]))
-  }
-  hits[1]
-}
-
-# Frequentist: estimate, 95% CI, p-value for hard_drugs_baseline
-extract_lm_stats <- function(fit, var = "hard_drugs_baseline") {
-  term <- find_term_name(names(coef(fit)), var)
-  ci   <- confint(fit, level = 0.95)
-  est  <- coef(fit)[term]
-  lcl  <- ci[term, 1]
-  ucl  <- ci[term, 2]
-  pval <- summary(fit)$coefficients[term, "Pr(>|t|)"]
-  list(estimate = est, lcl = lcl, ucl = ucl, p = pval)
-}
-
-# Bayesian: posterior mean & 95% HDI for hard_drugs_baseline
-extract_brm_stats_hdi <- function(fit, var = "hard_drugs_baseline", cred = 0.95) {
-  # Use posterior draws; column names are "b_<term>"
-  draws <- as_draws_df(fit)
-  # fixef names
-  fx_names <- dimnames(brms::fixef(fit))[[1]]
-  term     <- find_term_name(fx_names, var)
-  col_name <- paste0("b_", term)
-
-  if (!col_name %in% names(draws)) {
-    stop(sprintf("Could not find draws column '%s' in posterior draws.", col_name))
-  }
-
-  est <- mean(draws[[col_name]])
-  hdi_ci <- bayestestR::hdi(draws[[col_name]], ci = cred)
-  lcl <- hdi_ci$CI_low
-  ucl <- hdi_ci$CI_high
-  list(estimate = est, lcl = lcl, ucl = ucl)
-}
-
-# Compute ΔLOOIC for the hard_drugs term: LOOIC(reduced) - LOOIC(full)
-# Uses reloo=TRUE to stabilize if PSIS has high Pareto-k
-delta_loo_for_term <- function(full_fit, full_formula, var = "hard_drugs_baseline") {
-  # Build reduced formula by removing the term
-  reduced_formula <- reformulate(
-    termlabels = setdiff(attr(terms(full_formula), "term.labels"), var),
-    response   = as.character(formula(full_formula)[[2]])
-  )
-
-  # Fit reduced model based on full; update() preserves prior, backend, etc.
-  reduced_fit <- update(
-    full_fit,
-    formula    = reduced_formula,
-    recompile  = TRUE,
-    refresh    = 0,
-    seed       = 4130
-  )
-
-  # Add PSIS-LOO criteria; use reloo for stability if needed
-  full_fit    <- brms::add_criterion(full_fit,    "loo", reloo = TRUE)
-  reduced_fit <- brms::add_criterion(reduced_fit, "loo", reloo = TRUE)
-
-  loo_full <- full_fit$criteria$loo
-  loo_red  <- reduced_fit$criteria$loo
-
-  # LOOIC = -2 * elpd_loo
-  looic_full <- loo_full$estimates["looic","Estimate"]
-  looic_red  <- loo_red$estimates["looic","Estimate"]
-
-  delta    <- as.numeric(looic_red - looic_full)
-  se_full  <- loo_full$estimates["looic","SE"]
-  se_red   <- loo_red$estimates["looic","SE"]
-  se_delta <- sqrt(se_full^2 + se_red^2)
-
-  list(delta_looic = delta, se = se_delta)
-}
-
-# Helper to pretty format numbers
-fmt <- function(x, digits = 2) formatC(x, format = "f", digits = digits)
+# fit Bayesian models with adherence term
+bmod_ment_adh <- fit_brm(
+    formula = update(formula_ment, . ~ . + adh),
+    data = hiv_clean,
+    file = "../Models/bmod_ment_adh"
+)
+bmod_phys_adh <- fit_brm(
+    formula = update(formula_phys, . ~ . + adh),
+    data = hiv_clean,
+    file = "../Models/bmod_phys_adh"
+)
+bmod_vload_adh <- fit_brm(
+    formula = update(formula_vload, . ~ . + adh),
+    data = hiv_clean,
+    file = "../Models/bmod_vload_adh"
+)
+bmod_leu3n_adh <- fit_brm(
+    formula = update(formula_leu3n, . ~ . + adh),
+    data = hiv_clean,
+    file = "../Models/bmod_leu3n_adh"
+)
 ```
 
 ```{r}
 # Named list to iterate across outcomes (for labeling rows)
 row_labels <- c(
-  "SF-36 Mental QoL"   = "diff_agg_ment",
-  "SF-36 Physical QoL" = "diff_agg_phys",
+  "SF-36 MCS"   = "diff_agg_ment",
+  "SF-36 PCS" = "diff_agg_phys",
   "CD4+ T Cell Count"  = "diff_leu3n",
   "Log Viral Load"     = "diff_log_vload"
 )
 
 # Collect models in parallel lists (order must match row_labels)
-fmods  <- list(fmod_ment, fmod_phys, fmod_leu3n, fmod_vload)
-bmods  <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload)
-fforms <- list(formula_ment, formula_phys, formula_leu3n, formula_vload)
+fmods      <- list(fmod_ment, fmod_phys, fmod_leu3n, fmod_vload)  
+bmods_full <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload)
+bmods_red  <- list(bmod_ment_red, bmod_phys_red, bmod_leu3n_red, bmod_vload_red)
 
-table2 <- (
-    pmap_dfr(
-        list(names(row_labels), fmods, bmods, fforms),
-        function(outcome_label, ffit, bfit, fform) {
-            # Frequentist
-            fr <- extract_lm_stats(ffit, "hard_drugs_baseline")
-            fr_ci <- sprintf("[%s, %s]", fmt(fr$lcl), fmt(fr$ucl))
-            p_str <- if (fr$p < 0.001) "<0.001" else fmt(fr$p, digits = 3)
-            
-            # Bayesian with HDI
-            br <- extract_brm_stats_hdi(bfit, "hard_drugs_baseline", cred = 0.95)
-            br_ci <- sprintf("[%s, %s]", fmt(br$lcl), fmt(br$ucl))
-            
-            # ΔLOOIC (full vs reduced)
-            dL <- delta_loo_for_term(bfit, fform, "hard_drugs_baseline")
-            
-            tibble::tibble(
-                Outcome                  = outcome_label,
-                `Frequentist Estimate`   = as.numeric(fr$estimate),
-                `Frequentist 95% CI`     = fr_ci,
-                `p-value`                = p_str,
-                `Bayesian Estimate`      = as.numeric(br$estimate),
-                `Bayesian 95% HDI`       = br_ci,
-                `delta LOOIC`            = as.numeric(dL$delta_looic)
-                # Optionally: `SE delta LOOIC` = as.numeric(dL$se)
-            )
-        }
-    )
-    %>% mutate(
-        `Frequentist Estimate` = as.numeric(fmt(`Frequentist Estimate`)),
-        `Bayesian Estimate`    = as.numeric(fmt(`Bayesian Estimate`)),
-        `delta LOOIC`          = as.numeric(fmt(`delta LOOIC`, digits = 2))
-    )
-    %>% kable(
-        booktabs = TRUE,
-        linesep  = "",
-        caption  = "Frequentist and Bayesian Model Results for Hard Drug Use Effect",
-        align    = "lcccccc",
-        escape   = TRUE,
-        col.names = c("Outcome", "Estimate", "95% CI", "p-value",
-                      "Estimate", "95% HDI", "delta LOO-IC")
-    )
-    %>% add_header_above(
-        c(" " = 1, "Frequentist" = 3, "Bayesian" = 3),
-        bold = TRUE
-    )
-    %>% kable_styling(latex_options = c("HOLD_position"))
+table_freq_bayes <- (
+  pmap_dfr(
+    list(names(row_labels), fmods, bmods_full, bmods_red),
+    function(outcome_label, ffit, bfit_full, bfit_red) {
+      # Frequentist
+      fr    <- extract_lm_stats(ffit, "hard_drugs_baseline")
+      fr_ci <- sprintf("[%s, %s]", fmt(fr$lcl), fmt(fr$ucl))
+      p_str <- if (fr$p < 0.001) "<0.001" else fmt(fr$p, digits = 3)
+
+      # Bayesian with HDI (from full model)
+      br    <- extract_brm_stats_hdi(bfit_full, "hard_drugs_baseline", cred = 0.95)
+      br_ci <- sprintf("[%s, %s]", fmt(br$lcl), fmt(br$ucl))
+
+      # ΔLOOIC using prefit reduced model
+      dL <- delta_loo_prefit(bfit_full, bfit_red, reloo = FALSE)
+
+      tibble::tibble(
+        Outcome                  = outcome_label,
+        `Frequentist Estimate`   = as.numeric(fr$estimate),
+        `Frequentist 95% CI`     = fr_ci,
+        `p-value`                = p_str,
+        `Bayesian Estimate`      = as.numeric(br$estimate),
+        `Bayesian 95% HDI`       = br_ci,
+        `delta LOOIC`            = as.numeric(dL$delta_looic)
+      )
+    }
+  ) %>%
+  mutate(
+    `Frequentist Estimate` = as.numeric(fmt(`Frequentist Estimate`)),
+    `Bayesian Estimate`    = as.numeric(fmt(`Bayesian Estimate`)),
+    `delta LOOIC`          = as.numeric(fmt(`delta LOOIC`, digits = 2))
+  ) %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    linesep  = "",
+    caption  = "Frequentist and Bayesian Model Results for Hard Drug Use Effect",
+    align    = "lcccccc",
+    escape   = FALSE,
+    col.names = c("Outcome", "Estimate", "95\\% CI", "p-value",
+                  "Estimate", "95\\% HDI", "$\\Delta$ LOO-IC")
+  ) %>%
+  add_header_above(
+    c(" " = 1, "Frequentist" = 3, "Bayesian" = 3),
+    bold = TRUE
+  ) %>%
+  kable_styling(latex_options = c("scale_down", "HOLD_position"))
 )
 ```
 
 
 ```{r, include=TRUE}
-table2
+table_freq_bayes
 ```
 
 
@@ -503,7 +391,7 @@ We will begin by checking the analysis variables for missingness and outliers; w
 
 # Methods
 
-This analysis only considered subjects with all outcomes (PCS, MCS, CD4+ count, and viral load) measured at both baseline and two years. We assessed if missingness in the outcomes differed between hard drug users and non hard drug users. Due to low sample sizes within groups, Race/Ethnicity was combined into Non-Hispanic White and Other and Education was combined into No College Degree and College Degree or Greater. Outlier BMI measurements ($999$ (insufficient data), $-1$ (improbable value), and any biologically improbable values (BMI $<0$ or $>400$)) were excluded from the analysis. Additionally, viral load was analysed on the $\log_{10}$ scale 
+This analysis only considered subjects with all outcomes (PCS, MCS, CD4+ count, and viral load) measured at both baseline and two years. We assessed if missingness in the outcomes differed between hard drug users and non hard drug users. Due to low sample sizes within groups, Race/Ethnicity was combined into Non-Hispanic White and Other and Education was combined into No College Degree and College Degree or Greater. Outlier BMI measurements ($999$ (insufficient data), $-1$ (improbable value), and any biologically improssible values (BMI $<0$ or $>400$)) were excluded from the analysis. Additionally, viral load was analysed on the $\log_{10}$ scale 
 
 
-i could be that hard drug users have better adherence bc the ones that dont have good adherence did not have measurements at year 2
+Potential Limitation of this work: it could be that hard drug users have better adherence because the ones that dont have good adherence did not have measurements at year 2
