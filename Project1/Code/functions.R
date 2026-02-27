@@ -25,7 +25,7 @@ fit_brm <- function(formula, data, file = NULL) {
         formula = formula,
         data = data,
         file = file,
-        # prior = priors,
+        prior = priors,
         chains = chains,
         iter = iter,
         warmup = warmup,
@@ -71,10 +71,11 @@ extract_lm_stats <- function(fit, var = "hard_drugs_baseline") {
     list(estimate = est, lcl = lcl, ucl = ucl, p = pval)
 }
 
-# Bayesian: posterior mean & 95% HDI for hard_drugs_baseline
-extract_brm_stats_hdi <- function(fit, var = "hard_drugs_baseline", cred = 0.95) {
+# Bayesian: posterior mean, 95% HDI, and P(|Effect| > threshold)
+extract_brm_stats_hdi <- function(fit, var = "hard_drugs_baseline", cred = 0.95, threshold = 0) {
     # Use posterior draws; column names are "b_<term>"
     draws <- as_draws_df(fit)
+    
     # fixef names
     fx_names <- dimnames(brms::fixef(fit))[[1]]
     term     <- find_term_name(fx_names, var)
@@ -88,7 +89,11 @@ extract_brm_stats_hdi <- function(fit, var = "hard_drugs_baseline", cred = 0.95)
     hdi_ci <- bayestestR::hdi(draws[[col_name]], ci = cred)
     lcl <- hdi_ci$CI_low
     ucl <- hdi_ci$CI_high
-    list(estimate = est, lcl = lcl, ucl = ucl)
+    
+    # Calculate two-sided posterior probability of clinical significance
+    p_clin <- mean(abs(draws[[col_name]]) > threshold)
+    
+    list(estimate = est, lcl = lcl, ucl = ucl, p_clin = p_clin)
 }
 
 # Compute ΔLOOIC using prefit reduced model:

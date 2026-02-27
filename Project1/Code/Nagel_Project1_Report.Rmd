@@ -118,35 +118,40 @@ library(bayestestR)
         adh = adh_2
     )
     %>% select(-matches('_2'), -adh_baseline)
-    
-    # keep only participants with all outcomes at 0 and 2 years
-    %>% filter(!if_any(matches('diff'), is.na))
 ) -> hiv_clean
+```
+
+```{r}
+hiv_analysis <- hiv_clean %>% filter(!if_any(matches('diff'), is.na))
+```
+
+```{r, eval = FALSE}
+hist(hiv_analysis$diff_agg_ment)
+hist(hiv_analysis$diff_agg_phys)
+hist(hiv_analysis$diff_log_vload)
+hist(hiv_analysis$diff_leu3n)
 ```
 
 ```{r}
 (
     hiv_clean
-    %>% mutate(
-        missing = if_any(matches("diff"), is.na)
-    )
     %>% summarise(
-        .by = c(hard_drugs_baseline, missing),
-        n = n()
+        .by = smoke_baseline,
+        n_missing = sum(if_any(matches("diff"), is.na)),
+        total = n(),
+        prop = mean(if_any(matches("diff"), is.na))
     )
-    %>% group_by(hard_drugs_baseline)
-    %>% mutate(
-        prop = n/sum(n)
-    )
-    %>% arrange(hard_drugs_baseline, missing)
 )
+```
+```{r}
+hiv_clean %>% filter(if_any(matches('diff'), is.na))
 ```
 
 
 ```{r}
 # create table 1
 table1 <- (
-    hiv_clean
+    hiv_analysis
     %>% tbl_summary(
         by = hard_drugs_baseline,
         statistic = list(
@@ -222,48 +227,48 @@ formula_leu3n <- diff_leu3n ~
 
 ```{r}
 # frequentist models
-fmod_ment <- lm(formula_ment, data = hiv_clean)
-fmod_phys <- lm(formula_phys, data = hiv_clean)
-fmod_vload <- lm(formula_vload, data = hiv_clean)
-fmod_leu3n <- lm(formula_leu3n, data = hiv_clean)
+fmod_ment <- lm(formula_ment, data = hiv_analysis)
+fmod_phys <- lm(formula_phys, data = hiv_analysis)
+fmod_vload <- lm(formula_vload, data = hiv_analysis)
+fmod_leu3n <- lm(formula_leu3n, data = hiv_analysis)
 ```
 
 ```{r}
 # frequentist models with adherence
-fmod_ment_adh <- lm(update(formula_ment, . ~ . + adh), data = hiv_clean)
-fmod_phys_adh <- lm(update(formula_phys, . ~ . + adh), data = hiv_clean)
-fmod_vload_adh <- lm(update(formula_vload, . ~ . + adh), data = hiv_clean)
-fmod_leu3n_adh <- lm(update(formula_leu3n, . ~ . + adh), data = hiv_clean)
+fmod_ment_adh <- lm(update(formula_ment, . ~ . + adh), data = hiv_analysis)
+fmod_phys_adh <- lm(update(formula_phys, . ~ . + adh), data = hiv_analysis)
+fmod_vload_adh <- lm(update(formula_vload, . ~ . + adh), data = hiv_analysis)
+fmod_leu3n_adh <- lm(update(formula_leu3n, . ~ . + adh), data = hiv_analysis)
 ```
 
 ```{r}
 # fit Bayesian models
-bmod_ment <- fit_brm(formula = formula_ment, data = hiv_clean, file = "../Models/bmod_ment")
-bmod_phys <- fit_brm(formula = formula_phys, data = hiv_clean, file = "../Models/bmod_phys")
-bmod_vload <- fit_brm(formula = formula_vload, data = hiv_clean, file = "../Models/bmod_vload")
-bmod_leu3n <- fit_brm(formula = formula_leu3n, data = hiv_clean, file = "../Models/bmod_leu3n")
+bmod_ment <- fit_brm(formula = formula_ment, data = hiv_analysis, file = "../Models/bmod_ment")
+bmod_phys <- fit_brm(formula = formula_phys, data = hiv_analysis, file = "../Models/bmod_phys")
+bmod_vload <- fit_brm(formula = formula_vload, data = hiv_analysis, file = "../Models/bmod_vload")
+bmod_leu3n <- fit_brm(formula = formula_leu3n, data = hiv_analysis, file = "../Models/bmod_leu3n")
 ```
 
 ```{r}
 # fit Bayesian models without hard drug term
 bmod_ment_red <- fit_brm(
     formula = update(formula_ment, . ~ . - hard_drugs_baseline),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_ment_red"
 )
 bmod_phys_red <- fit_brm(
     formula = update(formula_phys, . ~ . - hard_drugs_baseline),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_phys_red"
 )
 bmod_vload_red <- fit_brm(
     formula = update(formula_vload, . ~ . - hard_drugs_baseline),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_vload_red"
 )
 bmod_leu3n_red <- fit_brm(
     formula = update(formula_leu3n, . ~ . - hard_drugs_baseline),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_leu3n_red"
 )
 ```
@@ -272,22 +277,22 @@ bmod_leu3n_red <- fit_brm(
 # fit Bayesian models with adherence term
 bmod_ment_adh <- fit_brm(
     formula = update(formula_ment, . ~ . + adh),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_ment_adh"
 )
 bmod_phys_adh <- fit_brm(
     formula = update(formula_phys, . ~ . + adh),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_phys_adh"
 )
 bmod_vload_adh <- fit_brm(
     formula = update(formula_vload, . ~ . + adh),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_vload_adh"
 )
 bmod_leu3n_adh <- fit_brm(
     formula = update(formula_leu3n, . ~ . + adh),
-    data = hiv_clean,
+    data = hiv_analysis,
     file = "../Models/bmod_leu3n_adh"
 )
 ```
@@ -301,6 +306,9 @@ row_labels <- c(
   "Log Viral Load"     = "diff_log_vload"
 )
 
+# Clinical thresholds matching the order of row_labels
+clinical_thresholds <- c(2, 2, 50, 0.5)
+
 # Collect models in parallel lists (order must match row_labels)
 fmods      <- list(fmod_ment, fmod_phys, fmod_leu3n, fmod_vload)  
 bmods_full <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload)
@@ -308,16 +316,18 @@ bmods_red  <- list(bmod_ment_red, bmod_phys_red, bmod_leu3n_red, bmod_vload_red)
 
 table_freq_bayes <- (
   pmap_dfr(
-    list(names(row_labels), fmods, bmods_full, bmods_red),
-    function(outcome_label, ffit, bfit_full, bfit_red) {
+    list(names(row_labels), fmods, bmods_full, bmods_red, clinical_thresholds),
+    function(outcome_label, ffit, bfit_full, bfit_red, thresh) {
+      
       # Frequentist
       fr    <- extract_lm_stats(ffit, "hard_drugs_baseline")
       fr_ci <- sprintf("[%s, %s]", fmt(fr$lcl), fmt(fr$ucl))
       p_str <- if (fr$p < 0.001) "<0.001" else fmt(fr$p, digits = 3)
 
-      # Bayesian with HDI (from full model)
-      br    <- extract_brm_stats_hdi(bfit_full, "hard_drugs_baseline", cred = 0.95)
+      # Bayesian with HDI and clinical threshold
+      br    <- extract_brm_stats_hdi(bfit_full, "hard_drugs_baseline", cred = 0.95, threshold = thresh)
       br_ci <- sprintf("[%s, %s]", fmt(br$lcl), fmt(br$ucl))
+      p_clin_str <- fmt(br$p_clin, digits = 3)
 
       # ΔLOOIC using prefit reduced model
       dL <- delta_loo_prefit(bfit_full, bfit_red, reloo = FALSE)
@@ -329,6 +339,7 @@ table_freq_bayes <- (
         `p-value`                = p_str,
         `Bayesian Estimate`      = as.numeric(br$estimate),
         `Bayesian 95% HDI`       = br_ci,
+        `P(|Effect| > Threshold)`= p_clin_str,
         `delta LOOIC`            = as.numeric(dL$delta_looic)
       )
     }
@@ -343,13 +354,13 @@ table_freq_bayes <- (
     booktabs = TRUE,
     linesep  = "",
     caption  = "Frequentist and Bayesian Model Results for Hard Drug Use Effect",
-    align    = "lcccccc",
+    align    = "lcccccccc", # Added one 'c' for the new column
     escape   = FALSE,
     col.names = c("Outcome", "Estimate", "95\\% CI", "p-value",
-                  "Estimate", "95\\% HDI", "$\\Delta$ LOO-IC")
+                  "Estimate", "95\\% HDI", "$P(|\\beta| > \\text{Threshold})$", "$\\Delta$ LOO-IC")
   ) %>%
   add_header_above(
-    c(" " = 1, "Frequentist" = 3, "Bayesian" = 3),
+    c(" " = 1, "Frequentist" = 3, "Bayesian" = 4), # Bayesian span goes from 3 to 4
     bold = TRUE
   ) %>%
   kable_styling(latex_options = c("scale_down", "HOLD_position"))
@@ -376,7 +387,7 @@ mcmc_plot(bmod, type = "acf") # check for lower autocorrelation
 
 
 ```{r}
-hiv_clean %>%
+hiv_analysis %>%
   pivot_longer(cols = starts_with("diff"), names_to = "outcome", values_to = "change") %>%
   ggplot(aes(x = hard_drugs_baseline, y = change, fill = hard_drugs_baseline)) +
   geom_boxplot(na.rm = TRUE) +
@@ -389,7 +400,7 @@ hiv_clean %>%
 
 # Introduction
 
-HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and quality of life measurements from the 36-Item Short Form Health Survey (SF-36) on men infected with HIV. Data was collected on subjects at the beginning of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to characterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in SF-36 Mental Component Summary (MCS) score, SF-36 Physical Component Summary (PCS) score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for baseline outcomes, age, bmi, smoking status, education, and race. Additionally, we will investigate if any significant differences across drug use are explained by study protocol adherence. 
+HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and 36-Item Short Form Health Survey (SF-36) quality of life summaries on men infected with HIV. Data was collected on subjects at the beginning of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to characterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in SF-36 Mental Component Summary (MCS) score, SF-36 Physical Component Summary (PCS) score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for baseline outcomes, age, bmi, smoking status, education, and race. Additionally, we will investigate if any significant differences across drug use are explained by study protocol adherence.
 
 # Preliminary Methods
 
@@ -397,13 +408,31 @@ We will begin by checking the analysis variables for missingness and outliers; w
 
 # Methods
 
-This analysis only considered subjects with all outcomes (PCS, MCS, CD4+ count, and viral load) measured at both baseline and two years. We assessed if missingness in the outcomes differed between hard drug users and non hard drug users. Due to low sample sizes within groups, Race/Ethnicity was combined into Non-Hispanic White and Other, Education was combined into No College Degree and College Degree or Greater. Outlier BMI measurements ($999$ (insufficient data), $-1$ (improbable value), and any biologically impossible values (BMI $<0$ or $>400$)) were excluded from the analysis. Additionally, as is common in the literature, viral load was analysed on the $\log_{10}$ scale.
+## Data Management
 
-## Bayesian Analysis Approach
+This analysis only considered subjects with the four primary measures, PCS, MCS, CD4+ count, and viral load, measured at both baseline and two years. Consistent with standard practice in the literature, viral load was analyzed on the $\log_{10}$ scale, where a one-unit increase corresponds to a 10-fold (order of magnitude) increase in viral load. We investigated if missingness in the primary measures differed between hard drug users and non hard drug users. Due to low sample sizes within specific strata, the categories of several demographic variables were combined: race/ethnicity was combined into non-Hispanic White and other, education was combined into no college degree and college degree or greater, and smoking was combined into current smokers and never/former smokers. Study protocol adherence at year 2 was dichotomized as $\ge95\%$ and $<95\%$. Additionally, biologically improbable BMI measurements (BMI $<0$ or $>400$) were excluded from the analysis. Finally, for each outcome, the difference between measurements at baseline and year 2 was calculated and assess for normality and outliers. A table of descriptive statistics was created for the demographic variables used in the analysis as well as the baseline outcome measurements.
 
-For all Bayesian models, the No-U-Turn Sampler (NUTS) was used with 4 chains; each chain ran for 1000 warmup iterations and 2000 total iterations. The Bayesian models also used non-informative priors: intercepts and fixed effects had $\mathcal{N}(0, 100)$ priors and the residual standard errors had  $\operatorname{HalfNormal(0, 100)}$ priors.
+## Analysis Approach
 
-all models had effective sample sizes well over 1000 and no evidence of issues with autocorrelation. convergence was assessed with trace plots and chain density overlays for each parameter. there was no evidence of issues with convergence in any of the bayesian models with all rhats near 1.
+Prior to analysis, the difference between baseline and year 2 outcomes were visualized for each outcome using histograms. 
 
+## Bayesian Modeling and Diagnositics.
+
+For all Bayesian models, the No-U-Turn Sampler (NUTS) was used with 4 chains. Parameters were initialized using random values sampled from a $\operatorname{Unif}(-2, 2)$ distribution on the unconstrained parameter space. Each chain ran for 1000 warmup iterations and 2000 total iterations per chain. The Bayesian models employed normally distributed likelihoods and non-informative priors: intercepts and fixed effects had $\operatorname{Normal}(0, 100)$ priors, and the residual standard errors had $\operatorname{Half-Normal}(0, 100)$ priors.
+
+The same diagnostic procedure was followed for all of the Bayesian models. First, we ensured the effective sample size (ESS) was sufficient for all parameters (> 1000) and that the R-hat (Gelman-Rubin statistic) was close to 1, indicating convergence.
+
+Convergence was further assessed by plotting each parameter's density for each chain. Additionally, trace and autocorrelation plots were visually inspected to evaluate chain mixing and sample dependency.
+
+
+# Results
+
+Table 1 shows summary statistics for the demographic variables and primary measures at baseline. Missingness in the primary measures was higher for the hard drug use group (41%) than the non-hard drug use group (33%), indicating that missingness may depend on hard drug use status. 
+
+all models had effective sample sizes well over 1000 and no evidence of issues with autocorrelation. convergence was assessed with trace plots and chain density overlays for each parameter. 
+
+there was no evidence of issues with convergence in any of the bayesian models with all rhats near 1.
+
+# Discussion
 
 Potential Limitation of this work: it could be that hard drug users have better adherence because the ones that dont have good adherence did not have measurements at year 2
