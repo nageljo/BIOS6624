@@ -44,7 +44,6 @@ library(bayestestR)
 ) -> hiv
 ```
 
-
 ```{r}
 # read in data
 (
@@ -57,11 +56,11 @@ library(bayestestR)
         timepoint = if_else(years == 0, 'baseline', as.character(years)),
         adh = recode_values(
             adh,
-            1:2 ~ ">95%",
+            1:2 ~ ">=95%",
             3:4 ~ "<95%",
             NA ~ NA_character_,
             default = "Not Handled"
-        ) %>% factor(levels = c(">95%", "<95%")),
+        ) %>% factor(levels = c(">=95%", "<95%")),
         hard_drugs = recode_values(
             hard_drugs,
             0 ~ "No Hard Drug Use",
@@ -231,10 +230,10 @@ fmod_leu3n <- lm(formula_leu3n, data = hiv_clean)
 
 ```{r}
 # frequentist models with adherence
-fmod_ment <- lm(update(formula_ment, . ~ . + adh), data = hiv_clean)
-fmod_phys <- lm(update(formula_phys, . ~ . + adh), data = hiv_clean)
-fmod_vload <- lm(update(formula_vload, . ~ . + adh), data = hiv_clean)
-fmod_leu3n <- lm(update(formula_leu3n, . ~ . + adh), data = hiv_clean)
+fmod_ment_adh <- lm(update(formula_ment, . ~ . + adh), data = hiv_clean)
+fmod_phys_adh <- lm(update(formula_phys, . ~ . + adh), data = hiv_clean)
+fmod_vload_adh <- lm(update(formula_vload, . ~ . + adh), data = hiv_clean)
+fmod_leu3n_adh <- lm(update(formula_leu3n, . ~ . + adh), data = hiv_clean)
 ```
 
 ```{r}
@@ -357,20 +356,27 @@ table_freq_bayes <- (
 )
 ```
 
-
 ```{r, include=TRUE}
 table_freq_bayes
 ```
 
 
-```{r}
-summary(fmod_leu3n)
+```{r, eval=FALSE}
+# diagnostics for Bayesian models
+bmods <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload,
+              bmod_ment_red, bmod_phys_red, bmod_leu3n_red, bmod_vload_red,
+              bmod_ment_adh, bmod_phys_adh, bmod_leu3n_adh, bmod_vload_adh)
+
+bmod <- bmod_vload_adh
+summary(bmod) # check R-hat (~1) and ESS (>1000)
+mcmc_plot(bmod, type = "dens_overlay") # all chains should match
+mcmc_plot(bmod, type = "trace") # check for good mixing
+mcmc_plot(bmod, type = "acf") # check for lower autocorrelation
 ```
 
 
 ```{r}
 hiv_clean %>%
-  # Pivot the difference columns longer so we can plot them all at once
   pivot_longer(cols = starts_with("diff"), names_to = "outcome", values_to = "change") %>%
   ggplot(aes(x = hard_drugs_baseline, y = change, fill = hard_drugs_baseline)) +
   geom_boxplot(na.rm = TRUE) +
@@ -391,7 +397,13 @@ We will begin by checking the analysis variables for missingness and outliers; w
 
 # Methods
 
-This analysis only considered subjects with all outcomes (PCS, MCS, CD4+ count, and viral load) measured at both baseline and two years. We assessed if missingness in the outcomes differed between hard drug users and non hard drug users. Due to low sample sizes within groups, Race/Ethnicity was combined into Non-Hispanic White and Other and Education was combined into No College Degree and College Degree or Greater. Outlier BMI measurements ($999$ (insufficient data), $-1$ (improbable value), and any biologically improssible values (BMI $<0$ or $>400$)) were excluded from the analysis. Additionally, viral load was analysed on the $\log_{10}$ scale 
+This analysis only considered subjects with all outcomes (PCS, MCS, CD4+ count, and viral load) measured at both baseline and two years. We assessed if missingness in the outcomes differed between hard drug users and non hard drug users. Due to low sample sizes within groups, Race/Ethnicity was combined into Non-Hispanic White and Other, Education was combined into No College Degree and College Degree or Greater. Outlier BMI measurements ($999$ (insufficient data), $-1$ (improbable value), and any biologically impossible values (BMI $<0$ or $>400$)) were excluded from the analysis. Additionally, as is common in the literature, viral load was analysed on the $\log_{10}$ scale.
+
+## Bayesian Analysis Approach
+
+For all Bayesian models, the No-U-Turn Sampler (NUTS) was used with 4 chains; each chain ran for 1000 warmup iterations and 2000 total iterations. The Bayesian models also used non-informative priors: intercepts and fixed effects had $\mathcal{N}(0, 100)$ priors and the residual standard errors had  $\operatorname{HalfNormal(0, 100)}$ priors.
+
+all models had effective sample sizes well over 1000 and no evidence of issues with autocorrelation. convergence was assessed with trace plots and chain density overlays for each parameter. there was no evidence of issues with convergence in any of the bayesian models with all rhats near 1.
 
 
 Potential Limitation of this work: it could be that hard drug users have better adherence because the ones that dont have good adherence did not have measurements at year 2

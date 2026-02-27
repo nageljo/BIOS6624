@@ -3,11 +3,11 @@
 ######################
 fit_brm <- function(formula, data, file = NULL) {
     # define priors and MCMC parameters
-    # priors <- c(
-    #     set_prior("normal(0, 100)", class = "Intercept"),    # prior for intercept
-    #     set_prior("normal(0, 100)", class = "b"),            # priors for fixed effects
-    #     set_prior("normal(0, 100)", class = "sigma", lb = 0) # prior for sigma
-    # )
+    priors <- c(
+        set_prior("normal(0, 100)", class = "Intercept"),    # prior for intercept
+        set_prior("normal(0, 100)", class = "b"),            # priors for fixed effects
+        set_prior("normal(0, 100)", class = "sigma", lb = 0) # prior for sigma
+    )
     chains <- 4
     iter <- 2000
     warmup <- 1000
