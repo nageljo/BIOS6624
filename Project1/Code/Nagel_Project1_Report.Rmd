@@ -2,7 +2,9 @@
 title: "Project1"
 author: "Joe Nagel"
 date: ""
-output: pdf_document
+output: 
+  pdf_document:
+    number_sections: true
 fontsize: 12pt
 mainfont: Helvetica
 geometry: margin=1in
@@ -136,13 +138,14 @@ hist(hiv_analysis$diff_leu3n)
 (
     hiv_clean
     %>% summarise(
-        .by = smoke_baseline,
+        .by = hard_drugs_baseline,
         n_missing = sum(if_any(matches("diff"), is.na)),
         total = n(),
         prop = mean(if_any(matches("diff"), is.na))
     )
 )
 ```
+
 ```{r}
 hiv_clean %>% filter(if_any(matches('diff'), is.na))
 ```
@@ -193,6 +196,7 @@ table1 <- (
     %>% add_overall(last = TRUE)
     %>% modify_footnote(everything() ~ NA)
     %>% as_kable_extra(
+        
         booktabs = TRUE,
         linesep = "",
         caption = "Descriptive Statistics of Baseline Covariates and Year 2 Adherence",
@@ -302,7 +306,7 @@ bmod_leu3n_adh <- fit_brm(
 row_labels <- c(
   "SF-36 MCS"   = "diff_agg_ment",
   "SF-36 PCS" = "diff_agg_phys",
-  "CD4+ T Cell Count"  = "diff_leu3n",
+  "CD4+ Count"  = "diff_leu3n",
   "Log Viral Load"     = "diff_log_vload"
 )
 
@@ -353,7 +357,7 @@ table_freq_bayes <- (
     format = "latex",
     booktabs = TRUE,
     linesep  = "",
-    caption  = "Frequentist and Bayesian Model Results for Hard Drug Use Effect",
+    caption  = "Frequentist and Bayesian Estimates for the Hard Drug Use Effect",
     align    = "lcccccccc", # Added one 'c' for the new column
     escape   = FALSE,
     col.names = c("Outcome", "Estimate", "95\\% CI", "p-value",
@@ -370,6 +374,156 @@ table_freq_bayes <- (
 ```{r, include=TRUE}
 table_freq_bayes
 ```
+```{r}
+# Collect models in parallel lists matching the outcomes
+bmods_base <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload)
+bmods_adh  <- list(bmod_ment_adh, bmod_phys_adh, bmod_leu3n_adh, bmod_vload_adh)
+
+row_labels <- c(
+  "SF-36 MCS",
+  "SF-36 PCS",
+  "CD4+ T Cell Count",
+  "Log Viral Load"
+)
+
+table_adh_comparison_bayes <- pmap_dfr(
+  list(row_labels, bmods_base, bmods_adh),
+  function(outcome_label, fit_base, fit_adh) {
+    
+    # 1. Unadjusted Hard drugs effect (Base model without adherence)
+    res_no_adh <- extract_brm_stats_hdi(fit_base, "hard_drugs_baseline")
+    
+    # 2. Adjusted Hard drugs effect (Model with adherence)
+    res_adh <- extract_brm_stats_hdi(fit_adh, "hard_drugs_baseline")
+    
+    # 3. Adherence effect (Model with adherence)
+    res_adh_term <- extract_brm_stats_hdi(fit_adh, "adh")
+    
+    # 4. Delta LOOIC
+    dL <- delta_loo_prefit(full_fit = fit_adh, reduced_fit = fit_base, reloo = FALSE)
+    
+    tibble::tibble(
+      Outcome = outcome_label,
+      `Unadj_Est` = fmt(res_no_adh$estimate, 2),
+      `Unadj_HDI` = sprintf("[%s, %s]", fmt(res_no_adh$lcl, 2), fmt(res_no_adh$ucl, 2)), 
+      `Adj_Est` = fmt(res_adh$estimate, 2),
+      `Adj_HDI` = sprintf("[%s, %s]", fmt(res_adh$lcl, 2), fmt(res_adh$ucl, 2)), 
+      `adh_est` = fmt(res_adh_term$estimate, 2),
+      `adh_HDI  ` = sprintf("[%s, %s]", fmt(res_adh_term$lcl, 2), fmt(res_adh_term$ucl, 2)),
+      `delta_loo` = fmt(dL$delta_looic, 1)
+    )
+  }
+) %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    linesep = "",
+    caption = "Bayesian Estimates: Impact of Adjusting for Adherence on the Effect of Baseline Hard Drug Use (HDU)",
+    escape = FALSE,
+    align = "lccccccc", # Updated to exactly match 8 columns
+    col.names = c(
+      "Outcome", 
+      "Estimate", 
+      "95\\% HDI", 
+      "Estimate", 
+      "95\\% HDI", 
+      "Estimate", 
+      "95\\% HDI", 
+      "$\\Delta$ LOO-IC"
+    )
+  ) %>%
+  add_header_above(
+    c(
+        " " = 1,
+        "Unadjusted HDU Effect" = 2, 
+        "Adjusted HDU Effect" = 2, 
+        "Adherence Effect" = 3
+    ), 
+    bold = TRUE
+  ) %>% 
+  kable_styling(latex_options = c("scale_down", "HOLD_position"))
+```
+
+
+```{r, include = TRUE}
+table_adh_comparison_bayes
+```
+
+```{r}
+# Collect frequentist models in parallel lists matching the outcomes
+fmods_base <- list(fmod_ment, fmod_phys, fmod_leu3n, fmod_vload)
+fmods_adh  <- list(fmod_ment_adh, fmod_phys_adh, fmod_leu3n_adh, fmod_vload_adh)
+
+row_labels <- c(
+  "SF-36 MCS",
+  "SF-36 PCS",
+  "CD4+ T Cell Count",
+  "Log Viral Load"
+)
+
+table_adh_comparison_freq <- pmap_dfr(
+  list(row_labels, fmods_base, fmods_adh),
+  function(outcome_label, fit_base, fit_adh) {
+    
+    # 1. Unadjusted Hard drugs effect (Base model)
+    res_no_adh <- extract_lm_stats(fit_base, "hard_drugs_baseline")
+    
+    # 2. Adjusted Hard drugs effect (Model with adherence)
+    res_adh <- extract_lm_stats(fit_adh, "hard_drugs_baseline")
+    
+    # 3. Adherence effect (Model with adherence)
+    res_adh_term <- extract_lm_stats(fit_adh, "adh")
+    
+    # 4. Format p-value for the adherence estimate
+    p_str <- if (res_adh_term$p < 0.001) "<0.001" else fmt(res_adh_term$p, digits = 3)
+    
+    tibble::tibble(
+      Outcome = outcome_label,
+      `Unadj_Est` = fmt(res_no_adh$estimate, 2),
+      `Unadj_CI` = sprintf("[%s, %s]", fmt(res_no_adh$lcl, 2), fmt(res_no_adh$ucl, 2)), 
+      `Adj_Est` = fmt(res_adh$estimate, 2),
+      `Adj_CI` = sprintf("[%s, %s]", fmt(res_adh$lcl, 2), fmt(res_adh$ucl, 2)), 
+      `adh_est` = fmt(res_adh_term$estimate, 2),
+      `adh_CI  ` = sprintf("[%s, %s]", fmt(res_adh_term$lcl, 2), fmt(res_adh_term$ucl, 2)),
+      `p_value` = p_str
+    )
+  }
+) %>%
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    linesep = "",
+    caption = "Frequentist Estimates: Impact of Adjusting for Adherence on the Effect of Baseline Hard Drug Use (HDU)",
+    escape = FALSE,
+    align = "lcccccccc", # 8 columns total
+    col.names = c(
+      "Outcome", 
+      "Estimate", 
+      "95\\% CI", 
+      "Estimate", 
+      "95\\% CI", 
+      "Estimate", 
+      "95\\% CI", 
+      "p-value"
+    )
+  ) %>%
+  add_header_above(
+    c(
+        " " = 1,
+        "Unadjusted HDU Effect" = 2, 
+        "Adjusted HDU Effect" = 2, 
+        "Adherence Effect" = 3
+    ), 
+    bold = TRUE
+  ) %>% 
+  kable_styling(latex_options = c("scale_down", "HOLD_position"))
+```
+
+```{r, include = TRUE}
+table_adh_comparison_freq
+```
+
+
 
 
 ```{r, eval=FALSE}
@@ -400,30 +554,23 @@ hiv_analysis %>%
 
 # Introduction
 
-HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits your body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and 36-Item Short Form Health Survey (SF-36) quality of life summaries on men infected with HIV. Data was collected on subjects at the beginning of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to characterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in SF-36 Mental Component Summary (MCS) score, SF-36 Physical Component Summary (PCS) score, HIV viral load, and CD4+ T cell count between baseline and two years across hard drug use status at baseline while adjusting for baseline outcomes, age, bmi, smoking status, education, and race. Additionally, we will investigate if any significant differences across drug use are explained by study protocol adherence.
-
-# Preliminary Methods
-
-We will begin by checking the analysis variables for missingness and outliers; we will specifically check if missingness differs between hard drug users and non-hard drug uses. We will calculate the change in outcomes as the value at Year 2 minus the value at Year 0. We will also visualize the distributions of the four outcome difference scores using histograms and boxplots to identify potential outliers and assess the need for any transformations prior to analysis. For the primary analysis, we will generate descriptive statistics to compare baseline demographic and clinical characteristics between those who reported hard drug use and those who did not. To evaluate the effect of baseline hard drug use on treatment response, we will fit four separate multivariable linear regression models—one for each outcome (change in PCS, MCS, CD4+ count, and viral load). The primary predictor of interest will be baseline hard drug use status. All models will adjust for the specified demographic variables: age, BMI, smoking status, education, and race. We will approach modeling from both a Bayesian and non-Bayesian approach. For the non-Bayesian, we will use standard Ordinary Least Squares (OLS) regression, reporting point estimates, 95% confidence intervals, and p-values. For the Bayesian, we will fit Bayesian linear regression models. We will specify non-informative or weakly informative prior distributions for our parameters and estimate posterior distributions using Markov Chain Monte Carlo (MCMC) methods. We will report posterior means, 95% Highest Posterior Density (HPD) credible intervals, and posterior probabilities to evaluate the primary research question. We will compare the results from both frameworks and determine if there are any differences in the interpretations. Finally, we will investigate if any relationship between hard drug use and the outcomes is explained by adherence to the treatment protocol.
+HIV (human immunodeficiency virus) is a virus that attacks the immune system; it destroys T-cells and inhibits the body's ability to fight infection. This analysis evaluates the effectiveness of highly active antiretroviral treatment (HAART), the standard treatment for HIV patients. The data come from the Multicenter AIDS Cohort Study, an ongoing study investigating HIV infection in homosexual and bisexual men in the United States. The dataset includes longitudinal demographic information, laboratory measurements, and 36-Item Short Form Health Survey (SF-36) quality of life summaries on men infected with HIV. Data was collected on subjects at the beginning of HAART treatment (baseline) and every year thereafter for up to 8 years. The primary goal of this analysis is to characterize how treatment response after 2 years of treatment differs based on a subjects hard drug use status at baseline. Specifically, we will investigate the difference in SF-36 Mental Component Summary (MCS) score, SF-36 Physical Component Summary (PCS) score, HIV viral load, and CD4+ T cell count (CD4+ count) between baseline and two years across hard drug use status at baseline while adjusting for baseline measurements, age, bmi, smoking status, education, and race. Additionally, we will investigate if any effects of hard drug use depend on study protocol adherence.
 
 # Methods
 
 ## Data Management
 
-This analysis only considered subjects with the four primary measures, PCS, MCS, CD4+ count, and viral load, measured at both baseline and two years. Consistent with standard practice in the literature, viral load was analyzed on the $\log_{10}$ scale, where a one-unit increase corresponds to a 10-fold (order of magnitude) increase in viral load. We investigated if missingness in the primary measures differed between hard drug users and non hard drug users. Due to low sample sizes within specific strata, the categories of several demographic variables were combined: race/ethnicity was combined into non-Hispanic White and other, education was combined into no college degree and college degree or greater, and smoking was combined into current smokers and never/former smokers. Study protocol adherence at year 2 was dichotomized as $\ge95\%$ and $<95\%$. Additionally, biologically improbable BMI measurements (BMI $<0$ or $>400$) were excluded from the analysis. Finally, for each outcome, the difference between measurements at baseline and year 2 was calculated and assess for normality and outliers. A table of descriptive statistics was created for the demographic variables used in the analysis as well as the baseline outcome measurements.
+This analysis only considered subjects with the four primary measures---PCS, MCS, CD4+ count, and viral load---measured before starting HAART treatment (baseline) and after two years of treatment (year 2).  Consistent with standard practice in the literature, viral load was analyzed on the $\log_{10}$ scale, where a one-unit increase corresponds to a 10-fold (order of magnitude) increase in viral load. We investigated if missingness in the primary measures differed between hard drug users and non hard drug users. Due to low sample sizes within specific strata, the categories of several demographic variables were combined: race/ethnicity was combined into non-Hispanic White and other, education was combined into no college degree and college degree or greater, and smoking was combined into current smokers and never/former smokers. Study protocol adherence at year 2 was dichotomized as $\ge95\%$ and $<95\%$. Additionally, biologically improbable BMI measurements (BMI $<0$ or $>400$) were excluded from the analysis. Finally, for each primary measure, the difference between measurements at baseline and year 2 was calculated and assess for normality and outliers. A table of descriptive statistics was created for the demographic variables used in the analysis as well as the primary measures at baseline.
 
 ## Analysis Approach
 
-Prior to analysis, the difference between baseline and year 2 outcomes were visualized for each outcome using histograms. 
+For each primary measure, the outcome was defined as the difference between the baseline and year 2 measurements. Prior to analysis, each outcome was visualized across hard drug uses status using histograms. Regression models were fit for each outcome using both frequentist and Bayesian approaches; all models adjusted for the subjects baseline measurement, bmi, age, race, education level, and smoking status.
 
 ## Bayesian Modeling and Diagnositics.
 
-For all Bayesian models, the No-U-Turn Sampler (NUTS) was used with 4 chains. Parameters were initialized using random values sampled from a $\operatorname{Unif}(-2, 2)$ distribution on the unconstrained parameter space. Each chain ran for 1000 warmup iterations and 2000 total iterations per chain. The Bayesian models employed normally distributed likelihoods and non-informative priors: intercepts and fixed effects had $\operatorname{Normal}(0, 100)$ priors, and the residual standard errors had $\operatorname{Half-Normal}(0, 100)$ priors.
+For all Bayesian models, the No-U-Turn Sampler (NUTS) was used with 4 chains. Parameters were initialized using random values sampled from a $\operatorname{Unif}(-2, 2)$ distribution on the unconstrained parameter space. Each chain ran for 1000 warmup iterations and 2000 total iterations. The Bayesian models employed normally distributed likelihoods and non-informative priors: intercepts and fixed effects had $\operatorname{Normal}(0, 100)$ priors, and the residual standard errors had $\operatorname{Half-Normal}(0, 100)$ priors.
 
-The same diagnostic procedure was followed for all of the Bayesian models. First, we ensured the effective sample size (ESS) was sufficient for all parameters (> 1000) and that the R-hat (Gelman-Rubin statistic) was close to 1, indicating convergence.
-
-Convergence was further assessed by plotting each parameter's density for each chain. Additionally, trace and autocorrelation plots were visually inspected to evaluate chain mixing and sample dependency.
-
+The same diagnostic procedure was followed for all of the Bayesian models. First, we ensured the effective sample size (ESS) was sufficient for all parameters (> 1000) and that the R-hat (Gelman-Rubin statistic) was close to 1, indicating convergence. Convergence was further assessed by plotting each parameter's density and comparing between chains. Additionally, trace and autocorrelation plots were visually inspected to evaluate chain mixing and sample dependency.
 
 # Results
 
