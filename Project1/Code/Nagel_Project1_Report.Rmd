@@ -131,6 +131,12 @@ library(bayestestR)
 hiv_analysis <- hiv_clean %>% filter(!if_any(matches('diff'), is.na))
 ```
 
+```{r}
+nrow(hiv_clean)
+nrow(hiv_analysis)
+```
+
+
 ```{r, eval = FALSE}
 hist(hiv_analysis$diff_agg_ment)
 hist(hiv_analysis$diff_agg_phys)
@@ -139,6 +145,7 @@ hist(hiv_analysis$diff_leu3n)
 ```
 
 ```{r}
+# check for missingness in outcomes across hard drug use
 (
     hiv_clean
     %>% summarise(
@@ -148,10 +155,6 @@ hist(hiv_analysis$diff_leu3n)
         prop = mean(if_any(matches("diff"), is.na))
     )
 )
-```
-
-```{r}
-hiv_clean %>% filter(if_any(matches('diff'), is.na))
 ```
 
 
@@ -198,20 +201,22 @@ table1 <- (
         )
     )
     %>% add_overall(last = TRUE)
+    
+    # ADDED THIS BLOCK TO SPLIT THE HEADERS
+    %>% modify_header(
+        all_stat_cols() ~ "{level}\nN = {n}",
+        stat_0 ~ "Overall\nN = {N}"
+    )
+    
     %>% modify_footnote(everything() ~ NA)
     %>% as_kable_extra(
-        
         booktabs = TRUE,
         linesep = "",
         caption = "Descriptive Statistics of Baseline Covariates and Year 2 Adherence",
-        escape = TRUE
+        escape = FALSE
     )
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
 )
-```
-
-```{r, include = TRUE}
-table1
 ```
 
 ```{r}
@@ -306,6 +311,8 @@ bmod_leu3n_adh <- fit_brm(
 ```
 
 ```{r}
+# create table of hard drug use effects for Bayesian and frequentist models
+
 # Named list to iterate across outcomes (for labeling rows)
 row_labels <- c(
   "SF-36 MCS"   = "diff_agg_ment",
@@ -365,20 +372,20 @@ table_freq_bayes <- (
     align    = "lcccccccc", # Added one 'c' for the new column
     escape   = FALSE,
     col.names = c("Outcome", "Estimate", "95\\% CI", "p-value",
-                  "Estimate", "95\\% HDI", "$P(|\\beta| > \\text{Threshold})$", "$\\Delta$ LOO-IC")
+                  "Estimate", "95\\% HDI", "Posterior Probability", "$\\Delta$ LOO-IC")
   ) %>%
   add_header_above(
     c(" " = 1, "Frequentist" = 3, "Bayesian" = 4), # Bayesian span goes from 3 to 4
     bold = TRUE
   ) %>%
-  kable_styling(latex_options = c("scale_down", "HOLD_position"))
+  kable_styling(latex_options = c("scale_down", "HOLD_position")) %>%
+  footnote(general = "The posterior probability represents the probability of a clinically meaningful effect or greater.")
 )
 ```
 
-```{r, include=TRUE}
-table_freq_bayes
-```
 ```{r}
+# create Bayesian hard drug use and adherence table
+
 # Collect models in parallel lists matching the outcomes
 bmods_base <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload)
 bmods_adh  <- list(bmod_ment_adh, bmod_phys_adh, bmod_leu3n_adh, bmod_vload_adh)
@@ -448,12 +455,9 @@ table_adh_comparison_bayes <- pmap_dfr(
   kable_styling(latex_options = c("scale_down", "HOLD_position"))
 ```
 
-
-```{r, include = TRUE}
-table_adh_comparison_bayes
-```
-
 ```{r}
+# create frequentist hard drug use and adherence table
+
 # Collect frequentist models in parallel lists matching the outcomes
 fmods_base <- list(fmod_ment, fmod_phys, fmod_leu3n, fmod_vload)
 fmods_adh  <- list(fmod_ment_adh, fmod_phys_adh, fmod_leu3n_adh, fmod_vload_adh)
@@ -523,13 +527,6 @@ table_adh_comparison_freq <- pmap_dfr(
   kable_styling(latex_options = c("scale_down", "HOLD_position"))
 ```
 
-```{r, include = TRUE}
-table_adh_comparison_freq
-```
-
-
-
-
 ```{r, eval=FALSE}
 # diagnostics for Bayesian models
 bmods <- list(bmod_ment, bmod_phys, bmod_leu3n, bmod_vload,
@@ -543,16 +540,16 @@ mcmc_plot(bmod, type = "trace") # check for good mixing
 mcmc_plot(bmod, type = "acf") # check for lower autocorrelation
 ```
 
-
 ```{r}
-hiv_analysis %>%
+# create histograms for each treatment response by drug use
+figure_differences <- hiv_analysis %>%
   pivot_longer(cols = starts_with("diff"), names_to = "outcome", values_to = "change") %>%
   # Recode the outcome variable for clean facet labels and set the order
   mutate(
     outcome = factor(
       outcome, 
       levels = c("diff_agg_ment", "diff_agg_phys", "diff_leu3n", "diff_log_vload"),
-      labels = c("SF-36 MCS", "SF-36 PCS", "CD4+ T Cell Count", "Log Viral Load")
+      labels = c("SF-36 MCS", "SF-36 PCS", "CD4+ T Cell Count", "Log10 Viral Load")
     )
   ) %>%
   ggplot(aes(x = hard_drugs_baseline, y = change, fill = hard_drugs_baseline)) +
@@ -564,8 +561,8 @@ hiv_analysis %>%
   # Use a clean, publication-standard theme
   theme_bw(base_size = 12) + 
   labs(
-    title = "Treatment Response (Year 0 to 2) by Baseline Hard Drug Use",
-    x = NULL, # Removes the redundant "hard_drugs_baseline" axis title
+    # title = "Treatment Response (Year 0 to 2) by Baseline Hard Drug Use",
+    x = NULL,
     y = "Change from Baseline"
   ) +
   theme(
@@ -589,11 +586,11 @@ HIV (human immunodeficiency virus) is a virus that attacks the immune system; it
 
 ## Data Management
 
-This analysis only considered subjects with the four primary measures---PCS, MCS, CD4+ count, and viral load---measured before starting HAART (baseline) and after two years of treatment (Year 2). Consistent with standard practice in the literature, viral load was analyzed on the $\log_{10}$ scale, where a one-unit increase corresponds to a 10-fold (order of magnitude) increase in viral load. Due to low sample sizes within specific strata, the categories of several demographic variables were combined: race/ethnicity was combined into "Non-Hispanic White" and "Other", education was combined into "No College Degree" and "College Degree or Greater", and smoking was combined into "Current Smokers" and "Never/Former Smokers". Study protocol adherence at Year 2 was dichotomized as $\ge95\%$ and $<95\%$. Additionally, biologically improbable BMI measurements (BMI $<0$ or $>400$) were excluded from the analysis. We investigated if the proportion of missingness in the primary measures differed between hard drug users and non-hard drug users. Finally, for each primary measure, the difference (Year 2 minus baseline) was calculated and assessed for normality and outliers. A table of descriptive statistics was created for the demographic variables, adherence, and primary measures at baseline.
+This analysis only considered subjects with the four primary measures---PCS, MCS, CD4+ count, and viral load---measured before starting HAART (baseline) and after two years of treatment (Year 2). Consistent with standard practice in the literature, viral load was analyzed on the $\log_{10}$ scale, where a one-unit increase corresponds to a 10-fold (order of magnitude) increase in viral load. For this analysis, all demographic variables were measured at baseline and adherence was measured at Year 2. Due to low sample sizes within specific strata, the categories of several demographic variables were combined: race/ethnicity was combined into "Non-Hispanic White" and "Other", education was combined into "No College Degree" and "College Degree or Greater", and smoking was combined into "Current Smokers" and "Never/Former Smokers". Study protocol adherence was dichotomized as $\ge95\%$ and $<95\%$. Additionally, biologically improbable BMI measurements (BMI $<0$ or $>400$) were excluded from the analysis. We investigated if the proportion of missingness in the primary measures differed between hard drug users and non-hard drug users. Finally, for each primary measure, the treatment response (Year 2 minus baseline) was calculated and assessed for normality and outliers. A table of descriptive statistics was created for the demographic variables, adherence, and primary measures at baseline.
 
 ## Analysis Approach
 
-Outcomes were defined as the difference between Year 2 and baseline measurements. Clinically meaningful changes were defined as a 2-unit change in MCS/PCS scores, a 50-cell/mm³ change in CD4+ count, and a 0.5 log10 change in viral load. Following descriptive visualization via boxplots, we fit frequentist and Bayesian multiple linear regression models with normal likelihoods for each outcome. Models evaluated baseline hard drug use as the primary predictor, adjusting for baseline outcome values, BMI, age, race, education, and smoking status. Results were summarized using point estimates, 95% CIs, and p-values (frequentist), alongside 95% HDIs, posterior probabilities, and LOO-IC (Bayesian). To assess the potential mediating role of adherence, we refit all models to include an adherence term and compared the hard drug use estimates between models with and without this term.
+Clinically meaningful treatment responses were defined as a 2-unit change in MCS/PCS scores, a 50-cell/mm³ change in CD4+ count, and a 0.5 log10 change in viral load. Following descriptive visualization via boxplots, we fit frequentist and Bayesian multiple linear regression models with normal likelihoods for each treatment response. Models evaluated baseline hard drug use as the primary predictor, adjusting for baseline outcome values, BMI, age, race, education, and smoking status. Results were summarized using point estimates, 95% CIs, and p-values (frequentist), alongside 95% HDIs, posterior probabilities, and LOO-IC (Bayesian). A 3-unit change in LOO-IC was defined as meaningful. To assess the role of adherence on the hard drug use effect, we refit all models to include an adherence term and compared the hard drug use estimates between models with and without this term.
 
 All analysis were performed using a type one error rate of ($\alpha = 0.05$). All models and figures were created with R version 4.5.1 and Bayesian modeling used `brms` version 2.23.0. ChatGPT version 5.2 was used to debug code, outline the report, and copy-edit the report.
 
@@ -605,11 +602,39 @@ The same diagnostic procedure was followed for all of the Bayesian models. First
 
 # Results
 
-Table 1 shows summary statistics for the demographic variables and primary measures at baseline. Missingness in the primary measures was higher for the hard drug use group (41%) than the non-hard drug use group (33%), indicating that missingness may depend on hard drug use status. 
+Of the 715 subjects in the dataset, 476 had all four primary measures recorded at both baseline and Year 2. These 476 subjects comprised the initial analysis dataset. Notably, missingness in the primary measures was higher among the hard drug use group (41%) compared to the non-hard drug use group (33%), suggesting that missingness may be dependent on baseline hard drug use status. *Table 1* presents the baseline descriptive statistics for all demographic variables and primary measures. Within this initial cohort, 13 subjects had missing or biologically improbable BMI values and were excluded, resulting in a final complete-case analysis dataset of 463 subjects. All Bayesian models had R-hat values close to 1, effective sample sizes over 1000, and no indication of issues with convergence, chain mixing, or sample dependency.
 
-all models had effective sample sizes well over 1000 and no evidence of issues with autocorrelation. convergence was assessed with trace plots and chain density overlays for each parameter. 
+```{r, include=TRUE}
+table1
+```
 
-there was no evidence of issues with convergence in any of the bayesian models with all rhats near 1.
+
+## Hard Drug Use Effects
+
+*Figure 1* visualizes the treatment response across hard drug use for each primary measurement. The model results for the hard drug use effect are shown in Table 2. For the SF-36 MCS score, there was no significant difference in treatment response between hard drug users and non-users (Frequentist Estimate: -0.29, 95% CI: [-3.75, 3.17], p = 0.870). The Bayesian results were consistent, showing an estimated difference of -0.30 (95% HDI: [-3.57, 3.32]), with a low probability (0.272) of a clinically meaningful effect and no improvement in model fit ($\Delta$ LOO-IC = -3.51). In contrast, hard drug users had a significantly lower treatment response in SF-36 PCS scores compared to non-users (Frequentist Estimate: -3.34, 95% CI: [-6.06, -0.61], p = 0.017). Bayesian estimates similarly showed a -3.33 unit difference (95% HDI: [-5.99, -0.66]), with a high probability (0.834) of a clinically significant effect and a meaningful improvement in model fit ($\Delta$ LOO-IC = 3.19). For CD4+ Count, hard drug users experienced a significantly lower response, estimated with a frequentist approach at -163.88 cells/mm³ (95% CI: [-226.35, -101.41], p < 0.001). The Bayesian model estimated a similar reduction of -148.99 cells/mm³ (95% HDI: [-206.12, -85.85]), with near certainty (probability = 0.999) of a clinically significant effect and a substantially better model fit ($\Delta$ LOO-IC = 24.31). Finally, there was no significant difference in log10 viral load treatment response between the groups (Frequentist Estimate: -0.06, 95% CI: [-0.46, 0.34], p = 0.770). The Bayesian results aligned, estimating a -0.05 difference (95% HDI: [-0.44, 0.33]), a very low probability (0.018) of clinical significance, and no improvement in model fit ($\Delta$ LOO-IC = -1.94).
+
+```{r, include=TRUE, fig.cap="Treatment Responses Across Hard Drug Use Status"}
+figure_differences
+```
+
+```{r, include=TRUE}
+table_freq_bayes
+```
+
+## Effects of Adjusting for Adherence
+
+As shown in *Table 1*, hard drug users in the analysis dataset had generally higher adherence ($97\%$ with $\ge 95\%$ adherence) than non-hard drug users ($89\%$ with $\ge 95\%$ adherence). Additionally of note, among hard drug users, only 1 subject did not have $\ge 95\%$ adherence to the study protocol. Model estimates for hard drug use with and without adjusting for adherence are shown in *Table 3* (Bayesian) and *Table 4* (frequentist). 
+
+```{r, include=TRUE}
+table_adh_comparison_bayes
+```
+
+```{r, include=TRUE}
+table_adh_comparison_freq
+```
+
+
+
 
 # Discussion
 
@@ -617,6 +642,10 @@ Potential Limitation of this work: it could be that hard drug users have better 
 
 # Reproducible Research
 
-## Data Filepath
+## GitHub Link
+
+`https://github.com/nageljo/BIOS6624`
+
+## Dataset Filepath
 
 `C:\Users\josep\OneDrive\AdvancedData\BIOS6624\Project1\Data\hiv_6624_final.csv`
