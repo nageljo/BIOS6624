@@ -1,5 +1,5 @@
 ---
-title: "Project1"
+title: "Impacts of Hard Drug Use on HAART Efficacy in HIV-Positive Men"
 author: "Joe Nagel"
 date: ""
 output: 
@@ -175,7 +175,7 @@ table1 <- (
             agg_ment_baseline    ~ "SF-36 MCS, mean (SD)",
             agg_phys_baseline    ~ "SF-36 PCS, mean (SD)",
             leu3n_baseline       ~ "CD4+ T Cell Count, mean (SD)",
-            log_vload_baseline   ~ "Log Viral Load, mean (SD)",
+            log_vload_baseline   ~ "Log10 Viral Load, mean (SD)",
             adh                  ~ "Adherence, n (%)",
             age_baseline         ~ "Age (Years), mean (SD)",
             bmi_baseline         ~ "BMI, mean (SD)",
@@ -611,7 +611,7 @@ table1
 
 ## Hard Drug Use Effects
 
-*Figure 1* visualizes the treatment response across hard drug use for each primary measurement. The model results for the hard drug use effect are shown in Table 2. For the SF-36 MCS score, there was no significant difference in treatment response between hard drug users and non-users (Frequentist Estimate: -0.29, 95% CI: [-3.75, 3.17], p = 0.870). The Bayesian results were consistent, showing an estimated difference of -0.30 (95% HDI: [-3.57, 3.32]), with a low probability (0.272) of a clinically meaningful effect and no improvement in model fit ($\Delta$ LOO-IC = -3.51). In contrast, hard drug users had a significantly lower treatment response in SF-36 PCS scores compared to non-users (Frequentist Estimate: -3.34, 95% CI: [-6.06, -0.61], p = 0.017). Bayesian estimates similarly showed a -3.33 unit difference (95% HDI: [-5.99, -0.66]), with a high probability (0.834) of a clinically significant effect and a meaningful improvement in model fit ($\Delta$ LOO-IC = 3.19). For CD4+ Count, hard drug users experienced a significantly lower response, estimated with a frequentist approach at -163.88 cells/mm³ (95% CI: [-226.35, -101.41], p < 0.001). The Bayesian model estimated a similar reduction of -148.99 cells/mm³ (95% HDI: [-206.12, -85.85]), with near certainty (probability = 0.999) of a clinically significant effect and a substantially better model fit ($\Delta$ LOO-IC = 24.31). Finally, there was no significant difference in log10 viral load treatment response between the groups (Frequentist Estimate: -0.06, 95% CI: [-0.46, 0.34], p = 0.770). The Bayesian results aligned, estimating a -0.05 difference (95% HDI: [-0.44, 0.33]), a very low probability (0.018) of clinical significance, and no improvement in model fit ($\Delta$ LOO-IC = -1.94).
+*Figure 1* visualizes the treatment response across hard drug use for each primary measurement. The model results for the hard drug use effect are shown in Table 2. For the SF-36 MCS score, there was no significant difference in treatment response between hard drug users and non-users (Frequentist Estimate: -0.29, 95% CI: [-3.75, 3.17], p = 0.870). The Bayesian results were consistent, showing an estimated difference of -0.30 (95% HDI: [-3.57, 3.32]), with a low probability (0.272) of a clinically meaningful effect and no improvement in model fit ($\Delta$ LOO-IC = -3.51). In contrast, hard drug users had a significantly lower treatment response in SF-36 PCS scores compared to non-users (Frequentist Estimate: -3.34, 95% CI: [-6.06, -0.61], p = 0.017). Bayesian estimates similarly showed a -3.33 unit difference (95% HDI: [-5.99, -0.66]), with a 0.834 probability of a clinically significant effect and a meaningful improvement in model fit ($\Delta$ LOO-IC = 3.19). For CD4+ Count, hard drug users experienced a significantly lower response, estimated with a frequentist approach at -163.88 cells/mm³ (95% CI: [-226.35, -101.41], p < 0.001). The Bayesian model estimated a similar, but somewhat smaller, reduction of -148.99 cells/mm³ (95% HDI: [-206.12, -85.85]), with near certainty (probability = 0.999) of a clinically significant effect and a substantially better model fit ($\Delta$ LOO-IC = 24.31). Finally, there was no significant difference in log10 viral load treatment response between the groups (Frequentist Estimate: -0.06, 95% CI: [-0.46, 0.34], p = 0.770). The Bayesian results aligned, estimating a -0.05 difference (95% HDI: [-0.44, 0.33]), a very low probability (0.018) of clinical significance, and no improvement in model fit ($\Delta$ LOO-IC = -1.94).
 
 ```{r, include=TRUE, fig.cap="Treatment Responses Across Hard Drug Use Status"}
 figure_differences
@@ -623,7 +623,7 @@ table_freq_bayes
 
 ## Effects of Adjusting for Adherence
 
-As shown in *Table 1*, hard drug users in the analysis dataset had generally higher adherence ($97\%$ with $\ge 95\%$ adherence) than non-hard drug users ($89\%$ with $\ge 95\%$ adherence). Additionally of note, among hard drug users, only 1 subject did not have $\ge 95\%$ adherence to the study protocol. Model estimates for hard drug use with and without adjusting for adherence are shown in *Table 3* (Bayesian) and *Table 4* (frequentist). 
+As shown in *Table 1*, hard drug users in the analysis dataset exhibited a higher rate of study protocol adherence compared to non-users (97% vs. 89% achieving $\ge 95\%$ adherence). Notably, only a single subject within the hard drug use cohort fell into the $<95\%$ adherence category. Due to this extreme lack of diversity in adherence among hard drug users, the data provides insufficient information to evaluate adherence as a potential confounder or mediator. Consequently, the inclusion of an adherence term (*Table 3* and *Table 4*) did not meaningfully change the estimated effects of baseline hard drug use. For the outcomes significantly associated with hard drug use---SF-36 PCS and CD4+ count---the estimates changed in magnitude by only 7.2% and 3.5%, respectively, while the non-significant effects remained near zero. Both the Bayesian and frequentist approaches produced consistent results for this part of the analysis.
 
 ```{r, include=TRUE}
 table_adh_comparison_bayes
@@ -633,12 +633,13 @@ table_adh_comparison_bayes
 table_adh_comparison_freq
 ```
 
+# Discussion and Conclusions
 
+There was not evidence of a statistically or clinically significant impact of hard drug use on the treatment response for viral load or mental quality of life (SF-36 MCS). The treatment response for SF-36 PCS scores was lower by about 3.3 units for subjects who used hard drugs, indicating that HAART was less effective at improving physical quality of life among hard drug users compared to non-users. However, there was not strong evidence that this effect met the 2-unit threshold for clinical significance (95% CI: [-6.06, -0.61], posterior probability: 83.4%). Hard drug use severely diminished CD4+ T cell count response, with both statistical frameworks estimating a reduction of approximately three times the 50 cell/mm³ clinical threshold (estimated at -164 and -149 cells/mm³ for the frequentist and Bayesian models, respectively).
 
+There was no evidence that study protocol adherence acts as a mediator or confounder in the relationship between hard drug use and treatment response across any of the primary measures. However, this assessment is severely limited by the lack of subjects with under 95% adherence in the hard drug use group. Additionally, the higher rate of missing data among hard drug users points to potential attrition bias; subjects who used hard drugs and struggled with adherence may have simply dropped out of the study before their Year 2 measurements were recorded.
 
-# Discussion
-
-Potential Limitation of this work: it could be that hard drug users have better adherence because the ones that dont have good adherence did not have measurements at year 2
+Overall, the frequentist and Bayesian approaches produced consistent results, leading to identical conclusions across all four primary measures. The only notable difference occurred in the CD4+ count estimates, likely a consequence of the prior penalizing the exceptionally large scale of the outcome. Future models evaluating CD4+ counts should utilize a flatter prior to mitigate this shrinkage.
 
 # Reproducible Research
 
