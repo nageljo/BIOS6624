@@ -56,10 +56,12 @@ library(bayestestR)
     hiv
     # remove bad bmi values
     %>% mutate(
-        log_vload = log10(vload),
+        log_vload = log10(vload), # change vload to log scale
         agg_ment = if_else(agg_ment < 0, NA_real_, agg_ment),
         bmi = if_else(bmi < 0 | 400 <= bmi, NA_real_, bmi),
         timepoint = if_else(years == 0, 'baseline', as.character(years)),
+        
+        # recode demographics and adherence
         adh = recode_values(
             adh,
             1:2 ~ ">=95%",
@@ -128,15 +130,18 @@ library(bayestestR)
 ```
 
 ```{r}
+# remove any subjects with missing outcomes
 hiv_analysis <- hiv_clean %>% filter(!if_any(matches('diff'), is.na))
 ```
 
 ```{r}
+# check number of analysis subjects
 nrow(hiv_clean)
 nrow(hiv_analysis)
 ```
 
 ```{r, eval = FALSE}
+# check for normality and outliers in outcomes
 hist(hiv_analysis$diff_agg_ment)
 hist(hiv_analysis$diff_agg_phys)
 hist(hiv_analysis$diff_log_vload)
@@ -201,7 +206,6 @@ table1 <- (
     )
     %>% add_overall(last = TRUE)
     
-    # ADDED THIS BLOCK TO SPLIT THE HEADERS
     %>% modify_header(
         all_stat_cols() ~ "{level}\nN = {n}",
         stat_0 ~ "Overall\nN = {N}"
