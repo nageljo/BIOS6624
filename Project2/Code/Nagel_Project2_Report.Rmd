@@ -1,0 +1,54 @@
+---
+title: "Nagel_Project2_Report"
+author: "Joseph Nagel"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, include = FALSE)
+```
+
+# Aim 1
+
+Hypothesis:
+
+We will employ novel measures of both peripheral inflammation and cognition to test our hypotheses that higher baseline cytokine and chemokine levels in circulating plasma will predict declines in memory consolidation and decreases in AD-signature cortical thickness (Hypothesis 1a), and that greater increases in cytokines and chemokines will be associated with greater declines in episodic memory and cortical thickness (Hypothesis 1b).
+
+Outcomes:
+
+* Cognitive
+    * Recall/Recog.
+        * CVLT (California Verbal Learning Test)
+            * List learning measure
+        * Benson Figure
+            * figure recall
+    * Pattern Recog.
+        MST (Mnemonic Similarity Task)
+    * Long Term Consolidation
+        * Story Recall
+* Mean cortical thickness
+
+Predictors:
+* IL-6 (cytokine)
+* TNF-alpha (cytokine)
+* MCP-1 (chemokine)
+* Eotaxin-1 (chemokine)
+* Beta-2 microglobulin (neither)
+* Alpha 1-antichymotrypsin (neither)
+
+
+# Aim 2
+
+
+
+## Hypothesis
+
+We will test our hypothesis of an interaction between peripheral levels of inflammation and amyloid deposition,
+such that the presence of both significant amyloid deposition and elevated peripheral inflammatory markers will
+be the strongest predictors of memory decline and decline in AD-signature cortical thickness over a one year
+period. This stems from our hypothesis that there is an exaggerated inflammatory response that contributes to
+AD pathological processes and is more pronounced and pervasive than in non-AD aging. Results gleaned from
+this Aim will provide new insights into the relationship(s) between inflammation and underlying amyloid
+pathology in predicting clinical progression.
+
