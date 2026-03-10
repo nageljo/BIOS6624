@@ -1,8 +1,17 @@
 ---
-title: "Nagel_Project2_Report"
-author: "Joseph Nagel"
-date: "`r Sys.Date()`"
-output: pdf_document
+title: "Research Strategy and Sample Size Estimation"
+author: "Joe Nagel"
+date: ""
+output: 
+  pdf_document:
+    number_sections: true
+fontsize: 12pt
+mainfont: Helvetica
+geometry: margin=1in
+header-includes:
+  - \usepackage{float}
+  - \usepackage{setspace}
+  - \doublespacing
 ---
 
 ```{r setup, include=FALSE}
@@ -10,10 +19,61 @@ knitr::opts_chunk$set(echo = FALSE, include = FALSE)
 ```
 
 # Aim 1
+All six outcomes of interest for this aim are continuous and include AD-signature cortical thickness and five cognitive measures capturing recall, recognition, pattern separation, and long term memory consolidation. We will use two cytokines (IL-6 and TNF-alpha) and two chemokines (MCP-1 and eotaxin-1) as our measures of peripheral inflammation. To investigate the relationship between the baseline measures of peripheral inflammation and the outcomes of interest (**Hypothesis 3a**), we will model the Year‑1 minus baseline change in each outcome as a function of the baseline inflammation measures and the baseline value of the outcome using regression analysis. To determine if increased measures of inflammation are associated with worse outcomes (**Hypothesis 3b**), we will refit the previous models using the Year-1 minus baseline change in inflammation measures and the baseline value of the outcome as the predictors. All models fit to address **Hypotheses 3a** and **3b** will control for age and sex, in addition to other measures associated with inflammation: cardiovascular risk markers (BMI, blood pressure, and history of hypercholesterolemia), NSAID use, and immune-related health conditions (Crohn's disease, irritable bowel syndrome, and arthritis).
 
 Hypothesis:
 
 We will employ novel measures of both peripheral inflammation and cognition to test our hypotheses that higher baseline cytokine and chemokine levels in circulating plasma will predict declines in memory consolidation and decreases in AD-signature cortical thickness (Hypothesis 1a), and that greater increases in cytokines and chemokines will be associated with greater declines in episodic memory and cortical thickness (Hypothesis 1b).
+
+1b) how are we modeling change?
+
+Outcomes:
+
+* Cognitive (total 5; all continuous)
+    * Recall/Recog.
+        * CVLT (California Verbal Learning Test)
+            * Total Correct
+            * Recog.
+        * Benson Figure
+            * figure recall
+    * Pattern Recog.
+        MST (Mnemonic Similarity Task)
+    * Long Term Consolidation
+        * Story Recall
+* Mean cortical thickness
+
+Predictors: (are we fitting models with all of the inflammation measures at once?)
+* IL-6 (cytokine)
+* TNF-alpha (cytokine)
+* MCP-1 (chemokine)
+* Eotaxin-1 (chemokine)
+
+Covariates:
+* age
+* sex
+* APOE genotype
+* cardiovascular risk factors
+    * BMI
+    * blood pressure
+    * history of hypercholesterolemia
+* NSAID use
+* immune related health conditions
+    * Crohn's
+    * IBS
+    * arthritis
+    
+Analysis approach:
+Regression of cognitive outcomes and coritcal thickness on cytokines and chemokines adjusting for age, sex, confounders and health measures related to inflammation
+
+
+# Aim 2
+
+Hypothesis:
+
+We will test our hypothesis of an interaction between peripheral levels of inflammation and amyloid deposition, such that the presence of both significant amyloid deposition and elevated peripheral inflammatory markers will
+be the strongest predictors of memory decline and decline in AD-signature cortical thickness over a one year period. This stems from our hypothesis that there is an exaggerated inflammatory response that contributes to AD pathological processes and is more pronounced and pervasive than in non-AD aging. Results gleaned from this Aim will provide new insights into the relationship(s) between inflammation and underlying amyloid pathology in predicting clinical progression.
+
+
 
 Outcomes:
 
@@ -29,26 +89,33 @@ Outcomes:
         * Story Recall
 * Mean cortical thickness
 
-Predictors:
+Predictors: (are we fitting models with all of the inflammation measures at once?)
 * IL-6 (cytokine)
 * TNF-alpha (cytokine)
 * MCP-1 (chemokine)
 * Eotaxin-1 (chemokine)
-* Beta-2 microglobulin (neither)
-* Alpha 1-antichymotrypsin (neither)
+* amyloid deposition (continuous)
+
+Covariates:
+* age
+* sex
+* confounders
+    * cardiovascular risk
+    * immuno. health history
+    * APOE genotype
+* health measures
+    * BMI
+    * history of hypercholesterolemia
+    * NSAID use
+    * immune-related health conditions
 
 
-# Aim 2
+# Power Analysis
+
+10% attrition expected over 1 year
+Recruit (already maximum): 138 aMCI and 56 HC
+Goal at year 1: 125 aMCI and 50 HC
 
 
 
-## Hypothesis
-
-We will test our hypothesis of an interaction between peripheral levels of inflammation and amyloid deposition,
-such that the presence of both significant amyloid deposition and elevated peripheral inflammatory markers will
-be the strongest predictors of memory decline and decline in AD-signature cortical thickness over a one year
-period. This stems from our hypothesis that there is an exaggerated inflammatory response that contributes to
-AD pathological processes and is more pronounced and pervasive than in non-AD aging. Results gleaned from
-this Aim will provide new insights into the relationship(s) between inflammation and underlying amyloid
-pathology in predicting clinical progression.
 
