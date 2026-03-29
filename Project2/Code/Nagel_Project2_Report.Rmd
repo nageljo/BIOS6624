@@ -21,6 +21,8 @@ knitr::opts_chunk$set(echo = FALSE, include = FALSE)
 ```{r}
 library(tidyverse)
 library(powertools)
+library(knitr)
+library(kableExtra)
 ```
 
 ```{r}
@@ -33,183 +35,182 @@ names(prelim)
 ```
 
 ```{r}
+cor(prelim)
+```
+
+
+```{r}
 # fit preliminary models
-cvlt_mod <- lm(CVLT_CNG3 ~ IL_6 + MCP_1, data = prelim)
+cvlt_mod <- lm(CVLT_CNG3 ~ IL_6, data = prelim)
 cort_mod <- lm(CORT_CNG3 ~ IL_6 + MCP_1, data = prelim)
 ```
 
 ```{r}
+cvlt_R2 <- summary(cvlt_mod)$r.squared
 summary(cvlt_mod)
 ```
 
 ```{r}
+cort_R2 <- summary(cort_mod)$r.squared
 summary(cort_mod)
 ```
 
 ```{r}
-N = 175 # planned study sample size
-p = 4   # planned number of predictors
-Rsq = 0.113
-alpha = 0.05
+# create table for Aim 1 omnibus power
+# define parameters
+N = 175
+p = 4
+alpha = 0.025
 power = NULL
 
-mlrF.overall(
-    N = N,
-    p = p,
-    Rsq = Rsq,
-    alpha = alpha,
-    power = power
+# create sequence of R squared values and calculate power
+table_aim1_omni = (
+    tibble(
+        Rsq = c(0.01, seq(from = 0.025, to = 0.15, by = 0.025)),
+        power = map_dbl(
+            .x = Rsq,
+            .f = \(Rsq) mlrF.overall(
+                N = N,
+                p = p,
+                Rsq = Rsq,
+                alpha = alpha,
+                power = power
+            )
+        )
+    )
+    %>% round(3)
+    %>% kable(
+        format = "latex",
+        booktabs = TRUE,
+        escape = FALSE,
+        linesep = "",
+        align = "cc",
+        col.names = c("$R^2$", "Power"),
+        caption = "Power to Detect Overall Inflammation Marker Effects ($\\alpha = 0.025$)"
+    )
+    %>% kable_styling(latex_options = c("HOLD_position"))
 )
 ```
 
 ```{r}
-N = 175 # planned study sample size
-p = 4   # planned number of predictors
-Rsq = 0.4823
-alpha = 0.05
+# create table for Aim 1 individual predictor power
+# define parameters
+N = 175
+rho0 = 0
+alpha = 0.025
 power = NULL
 
-mlrF.overall(
-    N = N,
-    p = p,
-    Rsq = Rsq,
-    alpha = alpha,
-    power = power
+# create sequence of R squared values and calculate power
+table_aim1_indv = (
+    tibble(
+        correlation = seq(from = 0.15, to = 0.5, by = 0.05),
+        power = map_dbl(
+            .x = correlation,
+            .f = \(rhoA) corr.1samp(
+                N = N,
+                rho0 = rho0,
+                rhoA = rhoA,
+                alpha = alpha,
+                power = power
+            )
+        )
+    )
+    %>% round(3)
+    %>% kable(
+        format = "latex",
+        booktabs = TRUE,
+        escape = FALSE,
+        linesep = "",
+        align = "cc",
+        col.names = c("$\\rho$", "Power"),
+        caption = "Power to Detect Individual Inflammation Marker Effects ($\\alpha = 0.025$)"
+    )
+    %>% kable_styling(latex_options = c("HOLD_position"))
 )
 ```
 
+```{r}
+# create table for Aim 2 power 
+N = 175
+alpha = 0.025
+power = NULL
+rho1 = 0.1
+
+table_aim2 = (
+    expand_grid(
+        prop_pos = seq(from = 0.1, to = 0.9, by = 0.2),
+        rho2 = seq(from = 0.2, to = 0.9, by = 0.1)
+    )
+    %>% mutate(
+        prop_neg = 1 - prop_pos,
+        n1 = ceiling(N*prop_neg),
+        n2 = N - n1,
+        n.ratio = n2/n1,
+        delta = rho2 - rho1,
+        power = pmap_dbl(
+            .l = list(n1 = n1, n.ratio = n.ratio, rho2 = rho2),
+            .f = \(n1, n.ratio, rho2) corr.2samp(
+                n1 = n1,
+                n.ratio = n.ratio,
+                rho1 = rho1,
+                rho2 = rho2,
+                alpha = alpha,
+                power = power
+            )
+        )
+        
+    )
+    %>% mutate(.keep = "none", delta, power, percent_pos = prop_pos)
+    %>% pivot_wider(
+        names_from = percent_pos,
+        values_from = power
+    )
+    %>% round(3)
+    %>% kable(
+        format = "latex",
+        booktabs = TRUE,
+        escape = FALSE,
+        linesep = "",
+        align = "cccccc",
+        col.names = c(
+            "$\\Delta \\rho$",
+            paste0(seq(10, 90, by = 20), "\\%")
+        ),
+        caption = "Power to Detect Amyloid Deposition Inflammation Interaction Effects ($\\alpha = 0.025$)"
+    )
+    %>% kable_styling(latex_options = c("HOLD_position"))
+    %>% add_header_above(c(" " = 1, "Percent with Amyloid Deposition" = 5))
+)
+```
 
 #### Aim 1 Research Strategy
 [including how you go from the data you will get from the investigator to your final data set and how you will assess/investigate any impact of the differences between the whole dataset and the one you would use for analysis]
 
-Prior to analysis, all analysis variables will be assess for informative missingness and   All six outcomes of interest for this aim are continuous and include AD-signature cortical thickness and five cognitive measures (reference the grant table here) capturing recall/recognition (California Verbal Learning Test-II and Benson Figure), pattern separation (Mnemonic Similarity Task), and long term memory consolidation (Story Recall). We will use two cytokines (IL-6 and TNF-alpha) and two chemokines (MCP-1 and eotaxin-1) as our measures of peripheral inflammation. To investigate the relationship between the baseline measures of peripheral inflammation and the outcomes of interest (**Hypothesis 1a**), we will model the Year‑1 minus baseline change in each outcome as a function of the baseline inflammation measures and the baseline value of the outcome using regression analysis; this approach will allow us to estimate the magnitude and direction of the relationship between the outcomes and each of the inflammation measures. To determine if increases in measures of inflammation are associated with worse outcomes (**Hypothesis 1b**), we will refit the previous models using the Year-1 minus baseline change in inflammation measures in place of the baseline inflammation measures. All models fit to address **Hypotheses 1a** and **1b** will control for age and sex. We will additionally consider other measures potentially associated with inflammation: cardiovascular risk markers (BMI, blood pressure, and history of hypercholesterolemia), NSAID use, and immune-related health conditions (Crohn's disease, irritable bowel syndrome, and arthritis). For these measures, we will use exploratory analysis to investigate their relationship with the outcomes and predictors; leveraging the results, we will decide which measures to include in the final analysis. [This is an excellent paragraph.  Consider here using one sentence to say specifically what would make you prioritize a variable or variables for inclusion and why.]
+[this could use improvement]
+Prior to analysis, all variables will be assessed for informative missingness, normality, and outliers. All six outcomes of interest for this aim are continuous and include AD-signature cortical thickness and the five cognitive measures enumerated in *Grant Table 3*, capturing recall/recognition, pattern separation, and long term memory consolidation. We will use two cytokines (IL-6 and TNF-alpha) and two chemokines (MCP-1 and eotaxin-1) as our measures of peripheral inflammation. To investigate the relationship between the baseline measures of peripheral inflammation and the outcomes of interest (**Hypothesis 1a**), we will model the baseline minus Year‑1 change in each outcome as a function of the baseline inflammation measures and the baseline value of the outcome using regression analysis. We will first evaluate the joint significance of the inflammation measures using an omnibus test. If the omnibus test is significant, we will then examine associations between the inflammation markers and the outcome using standardized estimates and confidence intervals. Preliminary data suggests that the inflammation measures may be highly correlated. If this causes high variance inflation, we will model each measure separately. To determine if increases in measures of inflammation are associated with worse outcomes (**Hypothesis 1b**), we will refit the previous models using the baseline minus Year-1 change in inflammation measures in place of the baseline inflammation measures and follow the same analysis procedure. All models fit to address **Hypotheses 1a** and **1b** will control for age and sex. We will also consider controlling for other variables potentially associated with inflammation: cardiovascular risk markers (BMI, blood pressure, and history of hypercholesterolemia), NSAID use, and immune-related health conditions (Crohn's disease, irritable bowel syndrome, and arthritis). Specifically, we will prioritize variables with the potential to function as mediators, confounders, or precision variables, based on their correlations with outcomes and/or measures of inflammation.
 
+We will control our Type 1 error for each hypothesis by accounting for testing each of two main outcomes, AD-signature cortical thickness and cognitive function. We expect that the cognitive measure will be correlated and preliminary data suggests that the measures of inflammation are correlation, so we will not adjust for multiple comparisons within these groups.
+
+[this needs a full rewrite]
 We will perform a power analysis for both **Hypotheses 1a** and **1b** by simplifying each regression into a correlation between an inflammation measure and an outcome. We will define both expected and clinically meaningful correlations and investigate the power to detect the relationships at the current sample size of 175. We will also calculate power for additional sample sizes to establish a complete characterization of the required sample size. Because this approach does not account for the additional covariates in the analysis, in the absense of confounders [True.  Since there could be confounders, but also precision, could instead point out that you expect both and so did not adjust the expected correlation accordingly.], it will produce conservative estimates.
-
-<!-- Hypothesis: -->
-
-<!-- We will employ novel measures of both peripheral inflammation and cognition to test our hypotheses that higher baseline cytokine and chemokine levels in circulating plasma will predict declines in memory consolidation and decreases in AD-signature cortical thickness (Hypothesis 1a), and that greater increases in cytokines and chemokines will be associated with greater declines in episodic memory and cortical thickness (Hypothesis 1b). -->
-
-<!-- 1b) how are we modeling change? -->
-
-<!-- Outcomes: -->
-
-<!-- * Cognitive (total 5; all continuous) -->
-<!--     * Recall/Recog. -->
-<!--         * CVLT (California Verbal Learning Test) -->
-<!--             * Total Correct --> 
-<!--             * Recog. -->
-<!--         * Benson Figure -->
-<!--             * figure recall -->
-<!--     * Pattern Recog. -->
-<!--         MST (Mnemonic Similarity Task) -->
-<!--     * Long Term Consolidation -->
-<!--         * Story Recall -->
-<!-- * Mean cortical thickness -->
-
-<!-- Predictors: (are we fitting models with all of the inflammation measures at once?) -->
-<!-- * IL-6 (cytokine) -->
-<!-- * TNF-alpha (cytokine) -->
-<!-- * MCP-1 (chemokine) -->
-<!-- * Eotaxin-1 (chemokine) -->
-
-<!-- Covariates: -->
-<!-- * age -->
-<!-- * sex -->
-<!-- * APOE genotype -->
-<!-- * cardiovascular risk factors -->
-<!--     * BMI -->
-<!--     * blood pressure -->
-<!--     * history of hypercholesterolemia -->
-<!-- * NSAID use -->
-<!-- * immune related health conditions -->
-<!--     * Crohn's -->
-<!--     * IBS -->
-<!--     * arthritis -->
-
-<!-- Analysis approach: -->
-<!-- Regression of cognitive outcomes and cortical thickness on cytokines and chemokines adjusting for age, sex, confounders and health measures related to inflammation -->
-
 
 #### Aim 2 Research Strategy
 
-This Aim involves the same inflammation measures and outcomes as Aim 1 in addition to a continuous measure of amyloid deposition. To investigate the interaction between amyloid deposition and peripheral inflammation markers (**Hypothesis 2**), we will refit the models from **Hypothesis 1b** that demonstrated a significant relationship between the inflammation marker and outcome. In these models, we will add a main effect of amyloid deposition and an interaction term between the change in the inflammation marker and amyloid deposition.  This will allow us to determine whether declines in memory and AD‑signature cortical thickness are greatest when both amyloid deposition is high and peripheral inflammation is elevated. These models will adjust for age, sex, and any additional measures related to inflammation found through the exploratory process described in Aim 1.
+This Aim involves the same inflammation measures and outcomes as **Aim 1** in addition to a continuous measure of amyloid deposition. To investigate the interaction between amyloid deposition and peripheral inflammation markers (**Hypothesis 2**), we will refit the models from **Hypothesis 1b** with the addition of a main effect of amyloid deposition and an interaction term between the change in the inflammation markers and amyloid deposition. We will only refit models that demonstrated a significant relationship between the inflammation markers and outcome. If no models demonstrated a significant relationship, all six models will be refit. This will allow us to determine whether declines in memory and AD‑signature cortical thickness are greatest when both amyloid deposition is high and peripheral inflammation is elevated. These models will adjust for age, sex, and any additional measures related to inflammation found through the exploratory process described in **Aim 1**.
+[One other detail to consider is a sentence or two about how you will describe any significant interactions - how will you report to make it meaningful beyond the p-value?]
 
+[this needs a full rewrite]
 Consistent with Aim 1, we will estimate power by simplifying the interaction effect of interest to an equivalent correlation. We will calculate the power to detect expected and clinically meaningful correlations across a range of sample sizes, including the current target sample of 175.
 
-<!-- Hypothesis: -->
 
-<!-- We will test our hypothesis of an interaction between peripheral levels of inflammation and amyloid deposition, such that the presence of both significant amyloid deposition and elevated peripheral inflammatory markers will -->
-<!-- be the strongest predictors of memory decline and decline in AD-signature cortical thickness over a one year period. This stems from our hypothesis that there is an exaggerated inflammatory response that contributes to AD pathological processes and is more pronounced and pervasive than in non-AD aging. Results gleaned from this Aim will provide new insights into the relationship(s) between inflammation and underlying amyloid pathology in predicting clinical progression. -->
+```{r, include=TRUE}
+table_aim1_omni
+```
 
+```{r, include=TRUE}
+table_aim1_indv
+```
 
-
-<!-- Outcomes: -->
-
-<!-- * Cognitive -->
-<!--     * Recall/Recog. -->
-<!--         * CVLT (California Verbal Learning Test) -->
-<!--             * List learning measure -->
-<!--         * Benson Figure -->
-<!--             * figure recall -->
-<!--     * Pattern Recog. -->
-<!--         MST (Mnemonic Similarity Task) -->
-<!--     * Long Term Consolidation -->
-<!--         * Story Recall -->
-<!-- * Mean cortical thickness -->
-
-<!-- Predictors: (are we fitting models with all of the inflammation measures at once?) -->
-<!-- * IL-6 (cytokine) -->
-<!-- * TNF-alpha (cytokine) -->
-<!-- * MCP-1 (chemokine) -->
-<!-- * Eotaxin-1 (chemokine) -->
-<!-- * amyloid deposition (continuous) -->
-
-<!-- Covariates: -->
-<!-- * age -->
-<!-- * sex -->
-<!-- * confounders -->
-<!--     * cardiovascular risk -->
-<!--     * immuno. health history -->
-<!--     * APOE genotype -->
-<!-- * health measures -->
-<!--     * BMI -->
-<!--     * history of hypercholesterolemia -->
-<!--     * NSAID use -->
-<!--     * immune-related health conditions -->
-
-
-<!-- # Power Analysis -->
-
-<!-- 10% attrition expected over 1 year -->
-<!-- Recruit (already maximum): 138 aMCI and 56 HC -->
-<!-- Goal at year 1: 125 aMCI and 50 HC -->
-
-What role should clinical group play in the analysis? -> None
-
-Should the second aim investigate the interaction with baseline predictor values or change in predictor values?
-
-Aim 1:
-    * Change over 1 year is the outcome of interest
-    * baseline predictors (1a)
-    * change in predictors (1b)
-
-
-Power:
-    * Grant background has regression model results but they are not enough
-    * We have preliminary data
-        * subset of outcomes
-        * subset of predictors
-    * We need at least 80%
-    
-        
-Amyloid Deposition:
-    * Think about using the potential cutoff to simplify the power calculation for Aim 2
-    
-aMCI and HC subjects:
-    * by having both groups was to have a broad range of the variables
-    * adjusting for HC/aMCI as a mediator may remove the effect we are looking for
-    
-    
-We can reference the grants tables in our analysis plan
-
+```{r, include=TRUE}
+table_aim2
+```
