@@ -1,0 +1,67 @@
+---
+title: "Risk Factors and Probability of Stroke"
+author: "Joe Nagel"
+date: ""
+output: 
+  pdf_document:
+    number_sections: true
+fontsize: 12pt
+mainfont: Helvetica
+geometry: margin=1in
+header-includes:
+  - \usepackage{float}
+  - \usepackage{setspace}
+  - \doublespacing
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
+```
+
+```{r}
+# read in packages
+library(tidyverse)
+library(naniar)
+library(janitor)
+library(knitr)
+library(kableExtra)
+```
+
+```{r}
+(
+    read_csv(
+        '../Data/frmgham2.csv',
+        show_col_types = FALSE,
+        name_repair = "unique_quiet"
+    )
+    %>% clean_names()
+) -> fram
+```
+
+```{r}
+naniar::vis_miss(fram)
+```
+
+```{r}
+head(fram)
+```
+
+```{r}
+(
+    fram
+    %>% summarise(
+        .by = randid
+    )
+)
+```
+
+
+# Reproducible Research
+
+## GitHub Link
+
+`https://github.com/nageljo/BIOS6624`
+
+## Dataset Filepath
+
+`C:\Users\josep\OneDrive\AdvancedData\BIOS6624\Project3\Data\frmgham2.csv`
