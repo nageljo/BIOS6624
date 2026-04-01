@@ -25,6 +25,8 @@ library(naniar)
 library(janitor)
 library(knitr)
 library(kableExtra)
+library(gtsummary)
+TEN_YEARS = 365.25*10
 ```
 
 ```{r}
@@ -35,6 +37,11 @@ library(kableExtra)
         name_repair = "unique_quiet"
     )
     %>% clean_names()
+    %>% mutate(
+        .before = randid,
+        stroke_in_followup = if_else(timestrk <= TEN_YEARS, stroke, 0),
+        stroke_time = pmin(timestrk, TEN_YEARS)
+    )
 ) -> fram
 ```
 
@@ -43,17 +50,61 @@ naniar::vis_miss(fram)
 ```
 
 ```{r}
-head(fram)
+names(fram)
+```
+
+```{r}
+sample_n(fram, size = 10)
 ```
 
 ```{r}
 (
     fram
-    %>% summarise(
-        .by = randid
+    %>% tbl_summary(
+        by = sex,
+        statistic = list(
+            all_continuous() ~ "{mean} ({sd})",
+            all_categorical() ~ "{n} ({p}%)"
+        ),
+        missing = "if_any",
+        missing_text = "Missing/Improbable, n (%)",
+        missing_stat = "{N_miss} ({p_miss}%)",
+        include = c(
+            totchol,
+            age,
+            sysbp,
+            cursmoke,
+            bmi,
+            diabetes,
+        )
     )
 )
 ```
+
+
+
+Do the analysis separately for males and female (the models can be different between sexes if there are different relationships)
+
+Risk factors (baseline only)
+    include: age, diabetes, blood pressure (systolic)
+    several risk factors not sure about: coronary heart disease, blood pressure medication, smoking status (current Y/N), total cholesterol, BMI
+    
+Exclusion criteria:
+    only those who have not already had a stroke
+    check for outliers
+    
+only interested in strokes
+
+We can treat events other than stroke as censored 
+
+we need descriptives of how predictors vary over time (we are not doing a time varying analysis)
+
+Only check time varying for diabetes and blood pressure (use descriptives and interpret how a time varying analysis may change results)
+
+censor events outside of the first 10 years of followup
+
+
+
 
 
 # Reproducible Research
