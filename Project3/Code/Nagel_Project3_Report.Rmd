@@ -26,6 +26,8 @@ library(janitor)
 library(knitr)
 library(kableExtra)
 library(gtsummary)
+library(survival)
+library(survminer)
 TEN_YEARS = 365.25*10
 ```
 
@@ -39,48 +41,133 @@ TEN_YEARS = 365.25*10
     %>% clean_names()
     %>% mutate(
         .before = randid,
-        stroke_in_followup = if_else(timestrk <= TEN_YEARS, stroke, 0),
-        stroke_time = pmin(timestrk, TEN_YEARS)
+        stroke_in_followup = if_else(0 < timestrk & timestrk <= TEN_YEARS, stroke, 0),
+        stroke_time = pmin(timestrk, TEN_YEARS)/365.25,
+        sex = factor(sex, levels = 1:2, labels = c("Male", "Female")),
+        bmi_cat = cut(
+            bmi,
+            breaks = c(-Inf, 25, 30, Inf),
+            labels = c("Normal", "Overweight", "Obese")
+        ),
+        chol_cat = cut(
+            totchol,
+            breaks = c(-Inf, 240, Inf),
+            labels = c("Normal", "High")
+        )
     )
 ) -> fram
 ```
 
 ```{r}
-naniar::vis_miss(fram)
+# check for missingness
+# naniar::vis_miss(fram)
 ```
 
 ```{r}
-names(fram)
-```
-
-```{r}
-sample_n(fram, size = 10)
-```
-
-```{r}
-(
+# create table 1
+table_one <- (
     fram
+    %>% filter(period == 1)
+    %>% mutate(stroke_time = stroke_time)
     %>% tbl_summary(
         by = sex,
         statistic = list(
             all_continuous() ~ "{mean} ({sd})",
             all_categorical() ~ "{n} ({p}%)"
         ),
-        missing = "if_any",
-        missing_text = "Missing/Improbable, n (%)",
+        missing = "ifany",
+        missing_text = "Missing, n (%)",
         missing_stat = "{N_miss} ({p_miss}%)",
         include = c(
-            totchol,
+            stroke_in_followup,
+            stroke_time,
+            prevstrk,
             age,
             sysbp,
-            cursmoke,
+            totchol,
             bmi,
             diabetes,
-        )
+            prevchd,
+            bpmeds,
+            cursmoke
+        ),
+        label = list(
+            stroke_in_followup ~ "Stroke During Follow-up, n (%)",
+            stroke_time ~ "Follow-up Time (Years), mean (SD)",
+            prevstrk ~ "Prevalent Stroke, n (%)",
+            age ~ "Age, mean (SD)",
+            sysbp ~ "Systolic Blood Pressure, mean (SD)",
+            totchol ~ "Total Cholesterol, mean (SD)",
+            bmi ~ "BMI, mean (SD)",
+            diabetes ~ "Diabetes, n (%)",
+            prevchd ~ "Coronary Heart Disease, n (%)",
+            bpmeds ~ "Blood Pressure Mediation, n (%)",
+            cursmoke ~ "Current Smoker, n (%)"
+        ),
     )
+    %>% add_overall(last = TRUE)
+    %>% modify_footnote(everything() ~ NA)
+    %>% as_kable_extra(
+        booktabs = TRUE,
+        linesep = "",
+        caption = "Descriptive Statistics of Events, Follow-up, and Baseline Risk Factors",
+        escape = FALSE
+    )
+    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
 )
 ```
 
+```{r, include=TRUE}
+table_one
+```
+
+```{r}
+# create analysis dataset
+fram_ana <- (
+    fram
+    # get baseline covariates and remove subjects who had a stroke before baseline
+    %>% filter(period == 1 & prevstrk == 0)
+)
+```
+
+```{r}
+get_km_plots <- function(variable, data) {
+    surv_fit <- survfit(
+        Surv(stroke_time, stroke_in_followup) ~ {{ variable }},
+        data = data
+    )
+    
+    min <- min(surv_fit$surv, na.rm = TRUE)
+    
+    curve_obj <- ggsurvplot(
+        surv_fit,
+        data = data,
+        ylim = c(min - 0.05, 1)
+    )
+    
+    plot <- curve_obj$plot
+    
+    return(plot)
+}
+```
+
+```{r}
+# get_km_plots(cursmoke, fram_ana)
+```
+
+
+```{r}
+# c(chol_cat, bmi_cat, cursmoke, prevchd, bpmeds)
+surv_fit <- survfit(Surv(stroke_time, stroke_in_followup) ~  bmi_cat, data = fram_ana)
+```
+
+```{r}
+ggsurvplot(
+    surv_fit,
+    data = fram_ana,
+    ylim = c(0.95, 1)
+)$plot
+```
 
 
 Do the analysis separately for males and female (the models can be different between sexes if there are different relationships)
