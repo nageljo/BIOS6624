@@ -28,6 +28,7 @@ library(kableExtra)
 library(gtsummary)
 library(survival)
 library(survminer)
+library(glmnet)
 TEN_YEARS = 365.25*10
 ```
 
@@ -117,9 +118,6 @@ table_one <- (
 )
 ```
 
-```{r, include=TRUE}
-table_one
-```
 
 ```{r}
 # create analysis dataset
@@ -169,20 +167,51 @@ ggsurvplot(
 )$plot
 ```
 
+```{r}
+# fit mod
+
+```
+
+
+# Introduction
+
+# Preliminary Methods
+
+separate evaluation of males and females
+
+backward selection of model covariates for males and females separately
+
+descriptive investigation of how covariates change with time ()
+
+estimate risk (probability) of stroke for specific profiles
+
+mention checking proportional hazards assumption
+
+```{r, include=TRUE}
+table_one
+```
+
+
+<!-- # Results -->
+
+<!-- # Discussion and Conclusion -->
+
+
+
 
 Do the analysis separately for males and female (the models can be different between sexes if there are different relationships)
 
 Risk factors (baseline only)
     include: age, diabetes, blood pressure (systolic)
     several risk factors not sure about: coronary heart disease, blood pressure medication, smoking status (current Y/N), total cholesterol, BMI
-    
+
 Exclusion criteria:
     only those who have not already had a stroke
     check for outliers
-    
+
 only interested in strokes
 
-We can treat events other than stroke as censored 
+We can treat events other than stroke as censored
 
 we need descriptives of how predictors vary over time (we are not doing a time varying analysis)
 
@@ -190,7 +219,18 @@ Only check time varying for diabetes and blood pressure (use descriptives and in
 
 censor events outside of the first 10 years of followup
 
+We are mainly interested in estimate 10 year probability of stroke across risk profiles
+    Ages: 40, 50, 60
+    Predict risk for average of continuous variables and 0 for binary separately for males and female
+    
+    High blood pressure (160 systolic)
+    diabetes
+    high blood pressure + diabetes
+    
+    you decided a risk profile (maybe obese)
+    
 
+do our covariates vary over time
 
 
 
