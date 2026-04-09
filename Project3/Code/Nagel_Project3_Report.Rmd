@@ -76,28 +76,10 @@ fram_ana <- (
     fram
     # get baseline covariates and remove subjects who had a stroke before baseline
     %>% filter(period == 1 & prevstrk == 0)
+    %>% select(randid, sex, stroke_in_followup, stroke_time, age, sysbp, totchol,
+               bmi, diabetes, prevchd, bpmeds, cursmoke)
 )
 ```
-
-```{r}
-(
-    fram_ana
-    %>% select(c(
-            stroke_in_followup,
-            stroke_time,
-            age,
-            sysbp,
-            totchol,
-            bmi,
-            diabetes,
-            prevchd,
-            bpmeds,
-            cursmoke
-        ))
-    %>% drop_na()
-)
-```
-
 
 ```{r}
 # create table 1
@@ -152,16 +134,43 @@ table_one <- (
 
 ```{r}
 # fit Cox PH models
-cox_ph_male <- coxph(
-    Surv(stroke_time, stroke_in_followup) ~ age + sysbp + totchol + bmi + diabetes + prevchd + bpmeds + cursmoke,
-    data = fram_ana %>% filter(sex == "Male")
+full_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp + totchol + bmi + prevchd + bpmeds + cursmoke
+base_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp
+
+cox_ph_full_male <- coxph(
+    full_formula,
+    data = fram_ana %>% filter(sex == "Male") %>% drop_na()
 )
 
-cox_ph_female <- coxph(
-    Surv(stroke_time, stroke_in_followup) ~ age + sysbp + totchol + bmi + diabetes + prevchd + bpmeds + cursmoke,
-    data = fram_ana %>% filter(sex == "Female")
+cox_ph_full_female <- coxph(
+    full_formula,
+    data = fram_ana %>% filter(sex == "Female") %>% drop_na()
 )
 ```
+
+```{r}
+# run backwards selection
+cox_ph_reduced_male <- step(
+  cox_ph_full_male,
+  scope = list(
+    lower = base_formula,
+    upper = full_formula
+  ),
+  direction = "backward"
+)
+```
+
+```{r}
+cox_ph_reduced_female <- step(
+  cox_ph_full_female,
+  scope = list(
+    lower = base_formula,
+    upper = full_formula
+  ),
+  direction = "backward"
+)
+```
+
 
 
 ```{r}
