@@ -21,6 +21,7 @@ knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
 ```{r}
 # read in packages
 library(tidyverse)
+library(patchwork)
 library(naniar)
 library(janitor)
 library(knitr)
@@ -137,12 +138,12 @@ table_one <- (
 full_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp + totchol + bmi + prevchd + bpmeds + cursmoke
 base_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp
 
-cox_ph_full_male <- coxph(
+coxph_full_male <- coxph(
     full_formula,
     data = fram_ana %>% filter(sex == "Male") %>% drop_na()
 )
 
-cox_ph_full_female <- coxph(
+coxph_full_female <- coxph(
     full_formula,
     data = fram_ana %>% filter(sex == "Female") %>% drop_na()
 )
@@ -150,8 +151,8 @@ cox_ph_full_female <- coxph(
 
 ```{r}
 # run backwards selection
-cox_ph_reduced_male <- step(
-  cox_ph_full_male,
+step(
+  coxph_full_male,
   scope = list(
     lower = base_formula,
     upper = full_formula
@@ -161,8 +162,8 @@ cox_ph_reduced_male <- step(
 ```
 
 ```{r}
-cox_ph_reduced_female <- step(
-  cox_ph_full_female,
+step(
+  coxph_full_female,
   scope = list(
     lower = base_formula,
     upper = full_formula
@@ -171,27 +172,88 @@ cox_ph_reduced_female <- step(
 )
 ```
 
+```{r}
+coxph_final_male <- coxph(
+    update(base_formula, . ~ . + cursmoke),
+    data = fram_ana %>% filter(sex == "Male") %>% drop_na()
+)
+
+coxph_final_female <- coxph(
+    update(base_formula, . ~ . + cursmoke),
+    data = fram_ana %>% filter(sex == "Female") %>% drop_na()
+)
+```
+
+```{r}
+coxph_res_male <- cox.zph(coxph_final_male)
+coxph_res_female <- cox.zph(coxph_final_female)
+```
 
 
 ```{r}
-get_km_plots <- function(variable, data) {
-    surv_fit <- survfit(
-        Surv(stroke_time, stroke_in_followup) ~ {{ variable }},
-        data = data
+titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
+
+(
+    ggcoxzph(
+        coxph_res_male,
+        se = FALSE,
+        font.main = 9
     )
-    
-    min <- min(surv_fit$surv, na.rm = TRUE)
-    
-    curve_obj <- ggsurvplot(
-        surv_fit,
-        data = data,
-        ylim = c(min - 0.05, 1)
+    %>% map2(
+        titles,
+        \(plot, title) {(
+            plot
+            + ylab("Schoenfeld Residuals")
+            + ggtitle(title)
+        )}
     )
-    
-    plot <- curve_obj$plot
-    
-    return(plot)
-}
+    %>% wrap_plots(res_plots_male, ncol = 2)
+        + plot_layout(axis_titles = "collect")
+)
+```
+
+```{r}
+(
+    ggcoxzph(
+        coxph_res_female,
+        se = FALSE,
+        font.main = 9
+    )
+    %>% map2(
+        titles,
+        \(plot, title) {(
+            plot
+            + ylab("Schoenfeld Residuals")
+            + ggtitle(title)
+        )}
+    )
+    %>% wrap_plots(res_plots_male, ncol = 2)
+        + plot_layout(axis_titles = "collect")
+)
+```
+
+
+
+
+```{r}
+# get_km_plots <- function(variable, data) {
+#     surv_fit <- survfit(
+#         Surv(stroke_time, stroke_in_followup) ~ {{ variable }},
+#         data = data
+#     )
+#     
+#     min <- min(surv_fit$surv, na.rm = TRUE)
+#     
+#     curve_obj <- ggsurvplot(
+#         surv_fit,
+#         data = data,
+#         ylim = c(min - 0.05, 1)
+#     )
+#     
+#     plot <- curve_obj$plot
+#     
+#     return(plot)
+# }
 ```
 
 ```{r}
@@ -201,15 +263,15 @@ get_km_plots <- function(variable, data) {
 
 ```{r}
 # c(chol_cat, bmi_cat, cursmoke, prevchd, bpmeds)
-surv_fit <- survfit(Surv(stroke_time, stroke_in_followup) ~  bmi_cat, data = fram_ana)
+# surv_fit <- survfit(Surv(stroke_time, stroke_in_followup) ~  bmi_cat, data = fram_ana)
 ```
 
 ```{r}
-ggsurvplot(
-    surv_fit,
-    data = fram_ana,
-    ylim = c(0.95, 1)
-)$plot
+# ggsurvplot(
+#     surv_fit,
+#     data = fram_ana,
+#     ylim = c(0.95, 1)
+# )$plot
 ```
 
 
