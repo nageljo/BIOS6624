@@ -189,6 +189,13 @@ coxph_res_male <- cox.zph(coxph_final_male)
 coxph_res_female <- cox.zph(coxph_final_female)
 ```
 
+```{r}
+coxph_res_male$table
+```
+
+```{r}
+coxph_res_female$table
+```
 
 ```{r}
 titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
@@ -196,8 +203,7 @@ titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
 (
     ggcoxzph(
         coxph_res_male,
-        se = FALSE,
-        font.main = 9
+        se = FALSE
     )
     %>% map2(
         titles,
@@ -216,8 +222,7 @@ titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
 (
     ggcoxzph(
         coxph_res_female,
-        se = FALSE,
-        font.main = 9
+        se = FALSE
     )
     %>% map2(
         titles,
@@ -232,6 +237,37 @@ titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
 )
 ```
 
+```{r}
+(
+    fram_ana
+    %>% summarise(
+        .by = sex,
+        across(
+            c(age, sysbp),
+            ~mean(., na.rm = TRUE)
+        )
+    )
+)
+
+risk_profiles <- (
+    tribble(
+        ~sex,     ~profile,          ~diabetes, ~cursmoke,
+        "Male",   "Baseline",        0,         0,
+        "Male",   "High BP",         0,         0,
+        "Male",   "Diabetes",        1,         0,
+        "Male",   "BP + Diabetes",   1,         0,
+        "Male",   "Smoker",          0,         1,
+        "Female", "Baseline",        0,         0,
+        "Female", "High BP",         0,         0,
+        "Female", "Diabetes",        1,         0,
+        "Female", "BP + Diabetes",   1,         0,
+        "Female", "Smoker",          0,         1
+    )
+    %>% mutate(
+        # diabetes = if_else()
+    )
+)
+```
 
 
 
