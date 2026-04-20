@@ -238,181 +238,33 @@ titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
 ```
 
 ```{r}
-# get mean blood pressure values across the population
-population_bp_means = (
+population_averages = (
     fram_ana
     %>% summarise(
         .by = sex,
-        sysbp = mean(sysbp)
-    )
-)
-```
-
-
-```{r}
-compute_year10_risk <- function(model, newdata) {
-    fit <- survfit(model, newdata)
-    est <- summary(fit, times = 10)
-    
-    year10_risk <- tibble(
-        risk = 1 - drop(est$surv),
-        lower_cl = 1 - drop(est$upper),
-        upper_cl = 1 - drop(est$lower)
-    )
-    
-    return(year10_risk)
-}
-```
-
-
-```{r}
-# create risk profiles
-risk_profiles <- (
-    tribble(
-        ~sex,      ~profile,                ~diabetes, ~cursmoke,
-        "Male",   "Baseline",               0,         0,
-        "Male",   "High BP",                0,         0,
-        "Male",   "Diabetes",               1,         0,
-        "Male",   "High BP + Diabetes",     1,         0,
-        "Male",   "Smoker",                 0,         1,
-        "Female", "Baseline",               0,         0,
-        "Female", "High BP",                0,         0,
-        "Female", "Diabetes",               1,         0,
-        "Female", "High BP + Diabetes",     1,         0,
-        "Female", "Smoker",                 0,         1
-    )
-    %>% left_join(population_averages, by = "sex")
-    %>% mutate(sysbp = if_else(str_detect(profile, "High BP"), 160, sysbp))
-    %>% crossing(age = c(40, 50, 60))
-    %>% group_by(sex)
-    %>% group_modify(~{
-        model <- if (.y$sex[[1]] == "Male") coxph_final_male else coxph_final_female
-        bind_cols(.x, compute_year10_risk(model, newdata = .x))
-    })
-    %>% ungroup()
-)
-```
-
-```{r}
-# create table of risk probabilities for males
-table_risk_male <- (
-    risk_profiles
-    %>% filter(sex == "Male")
-    %>% mutate(across(where(is.numeric), ~round(., 3)))
-    %>% mutate(
-        .keep = "none",
-        `Risk Profile` = profile,
-        age,
-        risk_ci = sprintf("%05.3f (%05.3f, %05.3f)", risk, lower_cl, upper_cl)
-    )
-    %>% pivot_wider(names_from = age, values_from = risk_ci)
-    %>% kable(
-        format = "latex",
-        booktabs = TRUE,
-        linesep  = "",
-        caption  = "10-Year Probability of Stroke for Males",
-        align = "cccc"
-    )
-    %>% add_header_above(c(" " = 1, "Age (Years)" = 3))
-    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
-    %>% footnote(general = "Values reported as: Probability (95% CI)")
-)
-```
-
-```{r}
-# create table of risk probabilities for females
-table_risk_female <- (
-    risk_profiles
-    %>% filter(sex == "Female")
-    %>% mutate(across(where(is.numeric), ~round(., 3)))
-    %>% mutate(
-        .keep = "none",
-        `Risk Profile` = profile,
-        age,
-        risk_ci = sprintf("%05.3f (%05.3f, %05.3f)", risk, lower_cl, upper_cl)
-    )
-    %>% pivot_wider(names_from = age, values_from = risk_ci)
-    %>% kable(
-        # format = "latex",
-        booktabs = TRUE,
-        linesep  = "",
-        caption  = "10-Year Probability of Stroke for Females",
-        align = "cccc"
-    )
-    %>% add_header_above(c(" " = 1, "Age (Years)" = 3))
-    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
-    %>% footnote(general = "Values reported as: Probability (95% CI)")
-)
-```
-
-```{r, include=TRUE}
-table_risk_male
-```
-
-```{r, include=TRUE}
-table_risk_female
-```
-
-```{r}
-(
-    fram
-    %>% filter(prevstrk == 0)
-    %>% summarise(
-        .by = c(period, sex),
-        mean_sysbp = mean(sysbp),
-        sd_sysbp = sd(sysbp),
-        n_diabetes = sum(diabetes),
-        percent_diabetes = mean(diabetes)*100,
-        n = n()
-    )
-    %>% mutate(
-        .keep = "none",
-        period,
-        Sex = sex,
-        `Systolic Blood Pressure, mean (SD)` = sprintf("%.0f (%.1f)", mean_sysbp, sd_sysbp),
-        `Diabetes, n (%)` = sprintf("%i (%.2f)", n_diabetes, percent_diabetes),
-        `Number of Observations` = as.character(n)
-    )
-    %>% pivot_longer(cols = !c(period, Sex), names_to = "Characteristic")
-    %>% mutate(
-        Characteristic = factor(
-            Characteristic,
-            levels = c(
-                "Number of Observations",
-                "Systolic Blood Pressure, mean (SD)",
-                "Diabetes, n (%)")
+        across(
+            c(age, sysbp),
+            ~mean(., na.rm = TRUE)
         )
     )
-    %>% relocate(Characteristic, Sex)
-    %>% arrange(Characteristic, Sex, period)
-    %>% pivot_wider(names_from = period, values_from = value)
-    %>% kable(
-        # format = "latex",
-        booktabs = TRUE,
-        linesep  = "",
-        caption  = "Summary of Blood Pressure and Diabetes Status by Collection Period",
-        align = "ccccc"
-    )
-    %>% row_spec(0, bold = TRUE)
-    %>% add_header_above(header = c(" " = 2, "Collection Period" = 3), bold = TRUE)
-    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
-    %>% collapse_rows(columns = 1)
 )
-```
 
-
-
-```{r}
-(
-    fram
-    %>% tbl_summary(
-        by = period,
-        statistic = list(
-            all_continuous() ~ "{mean} ({sd})",
-            all_categorical() ~ "{n} ({p}%)"
-        ),
-        include = c(diabetes, sysbp),
-        label = list(diabetes = "Diabetes", sysbp = "Systolic Blood Pressure")
+risk_profiles <- (
+    tribble(
+        ~sex,     ~profile,          ~diabetes, ~cursmoke,
+        "Male",   "Baseline",        0,         0,
+        "Male",   "High BP",         0,         0,
+        "Male",   "Diabetes",        1,         0,
+        "Male",   "BP + Diabetes",   1,         0,
+        "Male",   "Smoker",          0,         1,
+        "Female", "Baseline",        0,         0,
+        "Female", "High BP",         0,         0,
+        "Female", "Diabetes",        1,         0,
+        "Female", "BP + Diabetes",   1,         0,
+        "Female", "Smoker",          0,         1
+    )
+    %>% mutate(
+        # diabetes = if_else()
     )
 )
 ```
