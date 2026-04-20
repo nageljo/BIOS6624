@@ -240,6 +240,7 @@ titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
 ```{r}
 (
     fram_ana
+    %>% drop_na()
     %>% summarise(
         .by = sex,
         across(
@@ -256,12 +257,7 @@ risk_profiles <- (
         "Male",   "High BP",         0,         0,
         "Male",   "Diabetes",        1,         0,
         "Male",   "BP + Diabetes",   1,         0,
-        "Male",   "Smoker",          0,         1,
-        "Female", "Baseline",        0,         0,
-        "Female", "High BP",         0,         0,
-        "Female", "Diabetes",        1,         0,
-        "Female", "BP + Diabetes",   1,         0,
-        "Female", "Smoker",          0,         1
+        "Male",   "Smoker",          0,         1
     )
     %>% mutate(
         # diabetes = if_else()
