@@ -34,6 +34,7 @@ TEN_YEARS = 365.25*10
 ```
 
 ```{r}
+# read in data and create variables
 (
     read_csv(
         '../Data/frmgham2.csv',
@@ -133,6 +134,7 @@ table_one <- (
 ```
 
 ```{r}
+# plot KM curves for the five candidate risk variables
 plot_km_curves <- (
     fram_ana
     %>% mutate(
@@ -172,7 +174,7 @@ plot_km_curves <- (
 ```
 
 ```{r}
-# fit Cox PH models
+# fit full Cox PH models
 full_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp + totchol + bmi + prevchd + bpmeds + cursmoke
 base_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp
 
@@ -188,7 +190,7 @@ coxph_full_female <- coxph(
 ```
 
 ```{r}
-# run backwards selection
+# run backwards selection for males
 step(
   coxph_full_male,
   scope = list(
@@ -200,6 +202,7 @@ step(
 ```
 
 ```{r}
+# backwards selection for females
 step(
   coxph_full_female,
   scope = list(
@@ -211,6 +214,7 @@ step(
 ```
 
 ```{r}
+# fit final coxph models for males and females
 coxph_final_male <- coxph(
     update(base_formula, . ~ . + cursmoke),
     data = fram_ana %>% filter(sex == "Male") %>% drop_na()
@@ -223,6 +227,7 @@ coxph_final_female <- coxph(
 ```
 
 ```{r}
+# create table of hazard ratios for the male and females models
 table_model_coef <- (
     imap(
         list(male = coxph_final_male, female = coxph_final_female),
@@ -276,21 +281,25 @@ table_model_coef <- (
 
 
 ```{r}
+# get Schoenfled residuals
 coxph_res_male <- cox.zph(coxph_final_male)
 coxph_res_female <- cox.zph(coxph_final_female)
 ```
 
 ```{r}
+# check statistical test of Schoenfeld residuals for males
 coxph_res_male$table
 ```
 
 ```{r}
+# check statistical test of Schoenfeld residuals for females
 coxph_res_female$table
 ```
 
 ```{r}
 titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
 
+# plot Schoenfled residuals for males
 (
     ggcoxzph(
         coxph_res_male,
@@ -310,6 +319,7 @@ titles = c("Age (Years)", "Diabetes Status", "Systolic BP", "Smoking Status")
 ```
 
 ```{r}
+# plot Schoenfeld residuals for females
 (
     ggcoxzph(
         coxph_res_female,
@@ -341,6 +351,7 @@ population_bp_means = (
 
 
 ```{r}
+# function to compute 10-year risk given a coxph model
 compute_year10_risk <- function(model, newdata) {
     fit <- survfit(model, newdata)
     est <- summary(fit, times = 10)
@@ -437,6 +448,7 @@ table_risk_female <- (
 ```
 
 ```{r}
+# create table of sysbp and diabetes over clinical exams
 table_time_varying <- (
     fram
     %>% filter(prevstrk == 0)
@@ -516,7 +528,7 @@ The marginal stroke-free survival for each candidate risk factor is visualized i
 plot_km_curves
 ```
 
-After AIC-based backward selection, the male model retained smoking status in addition to the fixed covariates, whereas the female model retained only the fixed covariates. For interpretability and comparability across sexes, the final reporting models for both males and females included age, diabetes status, systolic blood pressure, and smoking status. Estimated hazard ratios are shown in *Table 2*. Among males, age (p < 0.001), diabetes (p < 0.001), systolic blood pressure (p < 0.001), and smoking status (p = 0.038) were significantly associated with the hazard of stroke. For males and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 92% (3%, 257%) higher hazard of stroke. Among females, age (p < 0.001) and systolic blood pressure (p < 0.001) were significantly associated with stroke hazard, while the data provided insufficient evidence of a significant association for diabetes (p = 0.254) or smoking status (p = 0.207). For females and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 44% (-18%, 252%) higher hazard of stroke.
+After AIC-based backward selection, the male model retained smoking status in addition to the fixed covariates, whereas the female model retained only the fixed covariates. For interpretability and comparability across sexes, the final reporting models for both males and females included age, diabetes status, systolic blood pressure, and smoking status. Both models were assessed for violations of the proportional hazards assumption. Visual inspection of the plots of the Schoenfled residuals did not show signs of any violations and statistical tests of the residuals for the male (p = 0.345) and female (p = 0.979) models did not provide significant evidence of a violation. Estimated hazard ratios are shown in *Table 2*. Among males, age (p < 0.001), diabetes (p < 0.001), systolic blood pressure (p < 0.001), and smoking status (p = 0.038) were significantly associated with the hazard of stroke. For males and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 92% (3%, 257%) higher hazard of stroke. Among females, age (p < 0.001) and systolic blood pressure (p < 0.001) were significantly associated with stroke hazard, while the data provided insufficient evidence of a significant association for diabetes (p = 0.254) or smoking status (p = 0.207). For females and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 44% (-18%, 252%) higher hazard of stroke.
 
 ```{r, include=TRUE}
 table_model_coef
