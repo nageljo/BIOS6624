@@ -29,7 +29,7 @@ library(kableExtra)
 library(gtsummary)
 library(survival)
 library(survminer)
-library(glmnet)
+library(broom)
 TEN_YEARS = 365.25*10
 ```
 
@@ -65,7 +65,6 @@ TEN_YEARS = 365.25*10
 fram$randid %>% unique() %>% length()
 ```
 
-
 ```{r}
 # check for missingness
 # naniar::vis_miss(fram)
@@ -78,7 +77,7 @@ fram_ana <- (
     # get baseline covariates and remove subjects who had a stroke before baseline
     %>% filter(period == 1 & prevstrk == 0)
     %>% select(randid, sex, stroke_in_followup, stroke_time, age, sysbp, totchol,
-               bmi, diabetes, prevchd, bpmeds, cursmoke)
+               bmi, diabetes, prevchd, bpmeds, cursmoke, bmi_cat, chol_cat)
 )
 ```
 
@@ -134,6 +133,45 @@ table_one <- (
 ```
 
 ```{r}
+plot_km_curves <- (
+    fram_ana
+    %>% mutate(
+        .keep = "none",
+        stroke_time,
+        stroke_in_followup,
+        sex,
+        `BP Meds` = factor(bpmeds, levels = 0:1, labels = c("No", "Yes")),
+        `Smoker` = factor(cursmoke, levels = 0:1, labels = c("No", "Yes")),
+        `Prev CHD` = factor(prevchd, levels = 0:1, labels = c("No", "Yes")),
+        Cholesterol = chol_cat,
+        BMI = bmi_cat
+    )
+    %>% drop_na()
+    %>% pivot_longer(
+        cols = !c(stroke_time, stroke_in_followup, sex),
+        names_to = "variable",
+        values_to = "value"
+    )
+    %>% group_by(sex, variable, value)
+    %>% group_modify(~{
+        fit <- survfit(Surv(stroke_time, stroke_in_followup) ~ 1, data = .x)
+        tibble(time = fit$time, surv = fit$surv)
+    })
+    %>% ungroup()
+    %>% ggplot(., aes(x = time, y = surv, color = value))
+        + geom_step(linewidth = 0.9)
+        + facet_grid(sex ~ variable)
+        + labs(
+            x = "Time (Years)",
+            y = "Survival probability",
+            color = "Group"
+        )
+        + scale_x_continuous(breaks = c(0, 5, 10))
+        + theme_minimal()
+)
+```
+
+```{r}
 # fit Cox PH models
 full_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp + totchol + bmi + prevchd + bpmeds + cursmoke
 base_formula = Surv(stroke_time, stroke_in_followup) ~ age + diabetes + sysbp
@@ -183,6 +221,63 @@ coxph_final_female <- coxph(
     data = fram_ana %>% filter(sex == "Female") %>% drop_na()
 )
 ```
+
+```{r}
+table_model_coef <- (
+    imap(
+        list(male = coxph_final_male, female = coxph_final_female),
+        ~ (
+          tidy(.x, conf.int = TRUE, exponentiate = TRUE)
+          %>% mutate(sex = .y, .before = 1)
+        )
+    )
+    %>% list_rbind()
+    %>% mutate(
+        .keep = "none",
+        term,
+        sex,
+        hazard_ratio = sprintf("%.3f", estimate),
+        ci = sprintf("%.3f, %.3f", conf.low, conf.high),
+        p_value = format.pval(p.value, digits = 2, eps = 0.001)
+    )
+    %>% pivot_wider(
+        names_from = sex,
+        values_from = c(hazard_ratio, ci, p_value)
+    )
+    %>% mutate(
+        .keep = "unused",
+        term = recode_values(
+            term,
+            "age" ~ "Age",
+            "diabetes" ~ "Diabetes",
+            "sysbp" ~ "Systolic Blood Pressure",
+            "cursmoke" ~ "Smoking Status"
+        )
+    )
+    %>% relocate(term,
+                 hazard_ratio_male, ci_male, p_value_male,
+                 hazard_ratio_female, ci_female, p_value_female)
+    %>% kable(
+        format = "latex",
+        booktabs = TRUE,
+        linesep  = "",
+        caption  = "Cox Proportional Hazards Model Estimates",
+        col.names = c("Coefficient",
+                      "Hazard Ratio", "95% CI", "p-value",
+                      "Hazard Ratio", "95% CI", "p-value"),
+        align = "ccccc"
+    )
+    %>% row_spec(0, bold = TRUE)
+    %>% add_header_above(c(" " = 1, "Male" = 3, "Female" = 3), bold = TRUE)
+    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
+)
+```
+
+```{r, include=TRUE}
+table_model_coef
+```
+
+
 
 ```{r}
 coxph_res_male <- cox.zph(coxph_final_male)
@@ -281,7 +376,7 @@ risk_profiles <- (
         "Female", "High BP + Diabetes",     1,         0,
         "Female", "Smoker",                 0,         1
     )
-    %>% left_join(population_averages, by = "sex")
+    %>% left_join(population_bp_means, by = "sex")
     %>% mutate(sysbp = if_else(str_detect(profile, "High BP"), 160, sysbp))
     %>% crossing(age = c(40, 50, 60))
     %>% group_by(sex)
@@ -298,12 +393,11 @@ risk_profiles <- (
 table_risk_male <- (
     risk_profiles
     %>% filter(sex == "Male")
-    %>% mutate(across(where(is.numeric), ~round(., 3)))
     %>% mutate(
         .keep = "none",
         `Risk Profile` = profile,
         age,
-        risk_ci = sprintf("%05.3f (%05.3f, %05.3f)", risk, lower_cl, upper_cl)
+        risk_ci = sprintf("%03.1f (%03.1f, %03.1f)", 100*risk, 100*lower_cl, 100*upper_cl)
     )
     %>% pivot_wider(names_from = age, values_from = risk_ci)
     %>% kable(
@@ -313,9 +407,10 @@ table_risk_male <- (
         caption  = "10-Year Probability of Stroke for Males",
         align = "cccc"
     )
-    %>% add_header_above(c(" " = 1, "Age (Years)" = 3))
+    %>% row_spec(0, bold = TRUE)
+    %>% add_header_above(c(" " = 1, "Age (Years)" = 3), bold = TRUE)
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
-    %>% footnote(general = "Values reported as: Probability (95% CI)")
+    %>% footnote(general = "Values reported as % Chance (95% CI)")
 )
 ```
 
@@ -324,24 +419,24 @@ table_risk_male <- (
 table_risk_female <- (
     risk_profiles
     %>% filter(sex == "Female")
-    %>% mutate(across(where(is.numeric), ~round(., 3)))
     %>% mutate(
         .keep = "none",
         `Risk Profile` = profile,
         age,
-        risk_ci = sprintf("%05.3f (%05.3f, %05.3f)", risk, lower_cl, upper_cl)
+        risk_ci = sprintf("%03.1f (%03.1f, %03.1f)", 100*risk, 100*lower_cl, 100*upper_cl)
     )
     %>% pivot_wider(names_from = age, values_from = risk_ci)
     %>% kable(
-        # format = "latex",
+        format = "latex",
         booktabs = TRUE,
         linesep  = "",
         caption  = "10-Year Probability of Stroke for Females",
         align = "cccc"
     )
-    %>% add_header_above(c(" " = 1, "Age (Years)" = 3))
+    %>% row_spec(0, bold = TRUE)
+    %>% add_header_above(c(" " = 1, "Age (Years)" = 3), bold = TRUE)
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
-    %>% footnote(general = "Values reported as: Probability (95% CI)")
+    %>% footnote(general = "Values reported as % Chance (95% CI)")
 )
 ```
 
@@ -354,7 +449,7 @@ table_risk_female
 ```
 
 ```{r}
-(
+table_time_varying <- (
     fram
     %>% filter(prevstrk == 0)
     %>% summarise(
@@ -369,8 +464,8 @@ table_risk_female
         .keep = "none",
         period,
         Sex = sex,
-        `Systolic Blood Pressure, mean (SD)` = sprintf("%.0f (%.1f)", mean_sysbp, sd_sysbp),
-        `Diabetes, n (%)` = sprintf("%i (%.2f)", n_diabetes, percent_diabetes),
+        `Systolic Blood Pressure, mean (SD)` = sprintf("%.1f (%.1f)", mean_sysbp, sd_sysbp),
+        `Diabetes, n (%)` = sprintf("%i (%.1f)", n_diabetes, percent_diabetes),
         `Number of Observations` = as.character(n)
     )
     %>% pivot_longer(cols = !c(period, Sex), names_to = "Characteristic")
@@ -387,7 +482,7 @@ table_risk_female
     %>% arrange(Characteristic, Sex, period)
     %>% pivot_wider(names_from = period, values_from = value)
     %>% kable(
-        # format = "latex",
+        format = "latex",
         booktabs = TRUE,
         linesep  = "",
         caption  = "Summary of Blood Pressure and Diabetes Status by Collection Period",
@@ -400,62 +495,11 @@ table_risk_female
 )
 ```
 
-
-
-```{r}
-(
-    fram
-    %>% tbl_summary(
-        by = period,
-        statistic = list(
-            all_continuous() ~ "{mean} ({sd})",
-            all_categorical() ~ "{n} ({p}%)"
-        ),
-        include = c(diabetes, sysbp),
-        label = list(diabetes = "Diabetes", sysbp = "Systolic Blood Pressure")
-    )
-)
+```{r, include=TRUE}
+table_time_varying
 ```
-
-
-
-```{r}
-# get_km_plots <- function(variable, data) {
-#     surv_fit <- survfit(
-#         Surv(stroke_time, stroke_in_followup) ~ {{ variable }},
-#         data = data
-#     )
-#     
-#     min <- min(surv_fit$surv, na.rm = TRUE)
-#     
-#     curve_obj <- ggsurvplot(
-#         surv_fit,
-#         data = data,
-#         ylim = c(min - 0.05, 1)
-#     )
-#     
-#     plot <- curve_obj$plot
-#     
-#     return(plot)
-# }
-```
-
-```{r}
-# get_km_plots(cursmoke, fram_ana)
-```
-
-
-```{r}
-# c(chol_cat, bmi_cat, cursmoke, prevchd, bpmeds)
-# surv_fit <- survfit(Surv(stroke_time, stroke_in_followup) ~  bmi_cat, data = fram_ana)
-```
-
-```{r}
-# ggsurvplot(
-#     surv_fit,
-#     data = fram_ana,
-#     ylim = c(0.95, 1)
-# )$plot
+```{r, include=TRUE, fig.cap="Kaplain-Meier Curves by Sex for Exploratory Variables"}
+plot_km_curves
 ```
 
 
