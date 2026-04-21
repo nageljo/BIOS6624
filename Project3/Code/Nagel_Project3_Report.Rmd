@@ -477,7 +477,7 @@ table_time_varying <- (
         align = "ccccc"
     )
     %>% row_spec(0, bold = TRUE)
-    %>% add_header_above(header = c(" " = 2, "Collection Period" = 3), bold = TRUE)
+    %>% add_header_above(header = c(" " = 2, "Clinical Exam" = 3), bold = TRUE)
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
     %>% collapse_rows(columns = 1)
 )
@@ -486,7 +486,7 @@ table_time_varying <- (
 
 # Introduction
 
-Strokes are medical emergencies caused by restricted or blocked blood flow to the brain. They are often caused by blood clots or tears in the blood vessels that supply blood to the brain. This analysis investigates the factors that contribute to the 10-year risk of stroke in adults. The data come from the Framingham Heart Study, a prospective study of 5,209 subjects living in Framingham, Massachusetts which began in 1948. The subset used in this analysis includes demographic information as well as risk factors and biological markers of heart disease which were collected during 3 clinical exams. Each subject was also followed for 24 years for medical events related to heart disease: Angina Pectoris, Myocardial Infarction, Atherothrombotic Infarction, Cerebral Hemorrhage (Stroke), and death. The primary goal of this analysis is to identify risk factors of stroke and characterize the 10-year probability of stroke across specific risk profiles. Specifically, we will investigate the relationship between stroke and several potential risk factors: coronary heart disease (CHD), blood pressure medication, smoking status, total cholesterol, and body mass index (BMI). We will then model the 10-year probability of stroke separately for males and females as a function of baseline age, diabetes status, blood pressure and any additional risk factors we have identified. We will additionally investigate how the risk factors vary over time and any implications that variability might have for the results of the analysis.
+Strokes are medical emergencies caused by restricted or blocked blood flow to the brain. They are often caused by blood clots or tears in the blood vessels that supply blood to the brain. This analysis investigates the factors that contribute to the 10-year risk of stroke in adults. The data come from the Framingham Heart Study, a prospective study of 5,209 subjects living in Framingham, Massachusetts which began in 1948. The subset used in this analysis includes demographic information as well as risk factors and biological markers of heart disease which were collected during 3 clinical exams approximately 6 years apart. Each subject was also followed for 24 years for medical events related to heart disease: Angina Pectoris, Myocardial Infarction, Atherothrombotic Infarction, Cerebral Hemorrhage (Stroke), and death. The primary goal of this analysis is to identify risk factors of stroke and characterize the 10-year probability of stroke across specific risk profiles. Specifically, we will investigate the relationship between stroke and several potential risk factors: coronary heart disease (CHD), blood pressure medication, smoking status, total cholesterol, and body mass index (BMI). We will then model the 10-year probability of stroke separately for males and females as a function of baseline age, diabetes status, blood pressure and any additional risk factors we have identified. We will additionally investigate how the risk factors vary over time and any implications that variability might have for the results of the analysis.
 
 <!-- # Preliminary Methods -->
 
@@ -500,7 +500,7 @@ Kaplan–Meier curves were created to descriptively assess stroke-free survival 
 
 Final models were used to investigate the probability of stroke for a set of five distinct risk profiles. The first profile established a baseline risk and was defined as an individual who is a non-smoker, does not have diabetes or CHD, and does not use BP medication, with total cholesterol, BMI, and blood pressure set at population averages. This baseline was then compared to profiles reflecting individuals with high blood pressure (BP=160), diabetes, both high blood pressure and diabetes, and current smokers. The 10-year probability of stroke was calculated for each profile at ages 40, 50 and 60. Finally, an exploratory analysis examined changes in risk factors across clinical examinations, focusing on variability in systolic blood pressure and diabetes status over time. This assessment was used to evaluate potential limitations of relying solely on baseline measurements and to inform whether a time-varying covariate modeling approach might be warranted.
 
-All analysis were performed using a type one error rate ($\alpha$) of 0.05. All models and figures were created with R version 4.5.1. ChatGPT version 5.2 was used to debug code, outline the report, and copy-edit the report.
+All analysis were performed using a Type I error rate ($\alpha$) of 0.05. All models and figures were created with R version 4.5.1. ChatGPT version 5.2 was used to debug code, outline the report, and copy-edit the report.
 
 # Results
 
@@ -516,13 +516,13 @@ The marginal stroke-free survival for each candidate risk factor is visualized i
 plot_km_curves
 ```
 
-After AIC-based backwards selection, the model for males retained only smoking status from the candidate predictors and the model for females only included the fixed covariates. Following the procedure defined above, the final models for both males and females included age, diabetes status, systolic blood pressure, and smoking status. The model coefficients on the hazard ratio scale are shown in *Table 2*. For both males and female, an increase in age and systolic blood pressure were significantly related to an increased hazard of stroke (all p < 0.001). Among males, age (p < 0.001), diabetes (p < 0.001), systolic blood pressure (p < 0.001) and smoking status (p = 0.038) were all significantly related to the hazard of stroke. Among females, however, only age (p < 0.001) and systolic blood pressure (p < 0.001) were significantly related to the hazard of stroke, while diabetes (p = 0.254) and smoking status (p = 0.207) were not.
+After AIC-based backward selection, the male model retained smoking status in addition to the fixed covariates, whereas the female model retained only the fixed covariates. For interpretability and comparability across sexes, the final reporting models for both males and females included age, diabetes status, systolic blood pressure, and smoking status. Estimated hazard ratios are shown in *Table 2*. Among males, age (p < 0.001), diabetes (p < 0.001), systolic blood pressure (p < 0.001), and smoking status (p = 0.038) were significantly associated with the hazard of stroke. For males and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 92% (3%, 257%) higher hazard of stroke. Among females, age (p < 0.001) and systolic blood pressure (p < 0.001) were significantly associated with stroke hazard, while the data provided insufficient evidence of a significant association for diabetes (p = 0.254) or smoking status (p = 0.207). For females and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 44% (-18%, 252%) higher hazard of stroke.
 
 ```{r, include=TRUE}
 table_model_coef
 ```
 
-The final sex-specific models were used to estimate the 10-year probability of stroke for each of the five risk profiles. These estimates are presented for males in *Table 3* and for females in *Table 4*. The 10-year probability of stroke for the baseline profile was similar between males and females, increasing from 0.6% for both sexes at age 40 to 2% for males and 2.5% for females are age 60. Among males, the estimated 10-year probability of stroke was higher for individuals with diabetes (age 40: 2.7%; age 60: 9.3%) than for current smokers (age 40: 1.1%; age 60: 3.8%) or those with elevated blood pressure (age 40: 1.4%; age 60: 5.1%). The highest risk was observed for the profile with high blood pressure and diabetes, with the estimated 10-year probability increasing from 6.7% at age 40 to 22.3% at age 60. Among females, the diabetes, elevated blood pressure, and current smoking profiles yielded similar estimated 10-year probabilities of stroke (age 40: 0.8%-1.1%; age 60: 3.6%-4.9%). The combined elevated blood pressure and diabetes profile again produced the highest estimated probabilities (age 40: 0.2%; age 60: 8.7%), although these estimates were notably lower than the corresponding values observed in males. It is important to note that the estimated probabilities were highly variable and formal tests for statistically significant differences between risk profiles were not performed.
+The final sex-specific models were used to estimate the 10-year probability of stroke for each of the five risk profiles. These estimates are presented for males in *Table 3* and for females in *Table 4*. The 10-year probability of stroke for the baseline profile was similar between males and females, increasing from 0.6% for both sexes at age 40 to 2% for males and 2.5% for females are age 60. Among males, the estimated 10-year probability of stroke was higher for individuals with diabetes (age 40: 2.7%; age 60: 9.3%) than for current smokers (age 40: 1.1%; age 60: 3.8%) or those with elevated blood pressure (age 40: 1.4%; age 60: 5.1%). The highest risk was observed for the profile with high blood pressure and diabetes, with the estimated 10-year probability increasing from 6.7% at age 40 to 22.3% at age 60. Among females, the diabetes, elevated blood pressure, and current smoking profiles yielded similar estimated 10-year probabilities of stroke (age 40: 0.8%-1.1%; age 60: 3.6%-4.9%). The combined elevated blood pressure and diabetes profile again produced the highest estimated probabilities (age 40: 0.2%; age 60: 8.7%), although these estimates were notably lower than the corresponding values observed in males. It is important to note that the estimated probabilities were highly variable and formal tests for significant differences between risk profiles were not performed.
 
 ```{r, include=TRUE}
 table_risk_male
@@ -532,14 +532,19 @@ table_risk_male
 table_risk_female
 ```
 
+Mean systolic blood pressure and the prevalence of diabetes across the three clinical examinations are summarized in Table 5. For both males and females, mean systolic blood pressure increased across successive exams. Among males, mean systolic blood pressure rose from 131.6 mmHg at Exam 1 to 138.9 mmHg at Exam 3. Females showed a similar increase, from 133.7 mmHg at Exam 1 to 140.6 mmHg at Exam 3. The prevalence of diabetes also increased over time in both groups. At Exam 1, diabetes was present in 3.1% of males and 2.4% of females; by Exam 3, these values increased to 8.3% in males and 7.1% in females.
+
 ```{r, include=TRUE}
 table_time_varying
 ```
 
-
-
-
 # Discussion and Conclusion
+
+This analysis evaluated five candidate stroke risk factors: prevalent CHD, blood pressure medication use, current smoking, total cholesterol, and BMI. Sex-stratified Cox proportional hazards models were fitted, adjusting for the fixed covariates of age, diabetes status, and systolic blood pressure. Following AIC-based backward elimination, smoking status was the only candidate risk factor retained in the male model; the remaining candidate predictors did not materially improve model fit. In contrast, the female model retained only the fixed covariates, with none of the candidate risk factors improving model fit by AIC. However, these results should be interpreted cautiously because AIC-based variable selection can yield overly optimistic inference. Conventional inference assumes a pre-specified model and does not account for the selection step; as a result, post-selection p-values can be anti-conservative and uncertainty can be underestimated.
+
+Using the final sex-specific models, 10-year stroke probabilities were calculated for five risk profiles. Across all ages and for both sexes, the baseline profile yielded the lowest estimated 10-year probability of stroke, whereas the combined high blood pressure and diabetes profile yielded the highest. Among males, the diabetes profile produced higher estimated probabilities than the high blood pressure and smoking profiles. Among females, the diabetes, high blood pressure, and smoking profiles had similar estimated probabilities.
+
+An exploratory assessment of covariates across the three clinical examinations indicated that risk factor values did not remain static over time. Mean systolic blood pressure increased and diabetes prevalence also increase across clinical exams for both sexes. Because systolic blood pressure was significantly associated with stroke hazard in both males and females, these findings suggest that the analysis may be limited by relying only on baseline covariate measurements. Future work incorporating time-varying covariates may better capture the evolving risk profile over follow-up.
 
 # Reproducible Research
 
