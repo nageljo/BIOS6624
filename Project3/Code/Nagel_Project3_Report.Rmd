@@ -1,5 +1,5 @@
 ---
-title: "Risk Factors and Probability of Stroke"
+title: "Sex-Specific Risk Factor Analysis and Probability Estimation for Stroke"
 author: "Joe Nagel"
 date: ""
 output: 
@@ -111,10 +111,10 @@ table_one <- (
         label = list(
             stroke_in_followup ~ "Stroke During Follow-up, n (%)",
             stroke_time ~ "Follow-up Time (Years), mean (SD)",
-            age ~ "Age, mean (SD)",
-            sysbp ~ "Systolic Blood Pressure, mean (SD)",
-            totchol ~ "Total Cholesterol, mean (SD)",
-            bmi ~ "BMI, mean (SD)",
+            age ~ "Age (Years), mean (SD)",
+            sysbp ~ "Systolic Blood Pressure (mmHg), mean (SD)",
+            totchol ~ "Total Cholesterol (mg/dL), mean (SD)",
+            bmi ~ "BMI (kg/m²), mean (SD)",
             diabetes ~ "Diabetes, n (%)",
             prevchd ~ "Coronary Heart Disease, n (%)",
             bpmeds ~ "Blood Pressure Mediation, n (%)",
@@ -124,6 +124,7 @@ table_one <- (
     %>% add_overall(last = TRUE)
     %>% modify_footnote(everything() ~ NA)
     %>% as_kable_extra(
+        latex = TRUE,
         booktabs = TRUE,
         linesep = "",
         caption = "Descriptive Statistics of Events, Follow-up, and Baseline Risk Factors",
@@ -242,7 +243,7 @@ table_model_coef <- (
         term,
         sex,
         hazard_ratio = sprintf("%.3f", estimate),
-        ci = sprintf("%.3f, %.3f", conf.low, conf.high),
+        ci = sprintf("(%.3f, %.3f)", conf.low, conf.high),
         p_value = format.pval(p.value, digits = 2, eps = 0.001)
     )
     %>% pivot_wider(
@@ -277,8 +278,6 @@ table_model_coef <- (
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
 )
 ```
-
-
 
 ```{r}
 # get Schoenfled residuals
@@ -349,7 +348,6 @@ population_bp_means = (
 )
 ```
 
-
 ```{r}
 # function to compute 10-year risk given a coxph model
 compute_year10_risk <- function(model, newdata) {
@@ -365,7 +363,6 @@ compute_year10_risk <- function(model, newdata) {
     return(year10_risk)
 }
 ```
-
 
 ```{r}
 # create risk profiles
@@ -417,7 +414,7 @@ table_risk_male <- (
     %>% row_spec(0, bold = TRUE)
     %>% add_header_above(c(" " = 1, "Age (Years)" = 3), bold = TRUE)
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
-    %>% footnote(general = "Values reported as % Chance (95% CI)")
+    %>% footnote(general = "Probabilities reported as % (95% CI)")
 )
 ```
 
@@ -443,7 +440,7 @@ table_risk_female <- (
     %>% row_spec(0, bold = TRUE)
     %>% add_header_above(c(" " = 1, "Age (Years)" = 3), bold = TRUE)
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
-    %>% footnote(general = "Values reported as % Chance (95% CI)")
+    %>% footnote(general = "Probabilities reported as % (95% CI)")
 )
 ```
 
@@ -464,7 +461,7 @@ table_time_varying <- (
         .keep = "none",
         period,
         Sex = sex,
-        `Systolic Blood Pressure, mean (SD)` = sprintf("%.1f (%.1f)", mean_sysbp, sd_sysbp),
+        `Systolic Blood Pressure (mmHg), mean (SD)` = sprintf("%.1f (%.1f)", mean_sysbp, sd_sysbp),
         `Diabetes, n (%)` = sprintf("%i (%.1f)", n_diabetes, percent_diabetes),
         `Number of Observations` = as.character(n)
     )
@@ -474,7 +471,7 @@ table_time_varying <- (
             Characteristic,
             levels = c(
                 "Number of Observations",
-                "Systolic Blood Pressure, mean (SD)",
+                "Systolic Blood Pressure (mmHg), mean (SD)",
                 "Diabetes, n (%)")
         )
     )
@@ -494,7 +491,6 @@ table_time_varying <- (
     %>% collapse_rows(columns = 1)
 )
 ```
-
 
 # Introduction
 
@@ -516,19 +512,19 @@ All analysis were performed using a Type I error rate ($\alpha$) of 0.05. All mo
 
 # Results
 
-Of the original 4434 subjects, 32 had a history of stroke and were excluded from the analysis. The remaining 4402 comprised the analysis dataset. *Table 1* summarizes the baseline covariates, events, and follow-up time for these subjects. Smoking was more prevalent among men than women, with 61% of men and 40% of women reporting current smoking at baseline. For the complete case analysis, 127 subjects with missing BMI, total cholesterol, or blood pressure medication use values were dropped, resulting in a final sample size of 4275 subjects. High values of systolic blood pressure ($295 \; mmHg$), total cholesterol ($696 \; mg/dL$), and BMI ($56 \; kg/m^2$) were observed. However, these values were biologically plausible and were retained for analysis.
+Of the original 4434 subjects, 32 had a history of stroke and were excluded from the analysis. The remaining 4402 comprised the analysis dataset. *Table 1* summarizes the baseline covariates, events, and follow-up time for these subjects. Smoking was more prevalent among men than women, with 61% of men and 40% of women reporting current smoking at baseline. For the complete case analysis, 127 subjects with missing BMI, total cholesterol, or blood pressure medication use values were dropped, resulting in a final sample size of 4275 subjects. High values of systolic blood pressure (295 mmHg), total cholesterol (696 mg/dL), and BMI (56 kg/m^2^) were observed. However, these values were biologically plausible and were retained for analysis.
 
 ```{r, include=TRUE}
 table_one
 ```
 
-The marginal stroke-free survival for each candidate risk factor is visualized in *Figure 1*. Blood pressure medication used and prevalent CHD appear to have the strongest relationship with stroke for both men and women. However, very few subjects used blood pressure medication (3.1%) or had CHD diagnosed before the study (4.2%). Additionally of note, the relationship between high cholesterol ($> 240 \; mg/dL$) and stroke appeared to be stronger among women than men.
+The marginal stroke-free survival for each candidate risk factor is visualized in *Figure 1*. Blood pressure medication used and prevalent CHD appear to have the strongest relationship with stroke for both men and women. However, very few subjects used blood pressure medication (3.1%) or had CHD diagnosed before the study (4.2%). Additionally of note, the relationship between high cholesterol (\> 240 mg/dL) and stroke appeared to be stronger among women than men.
 
 ```{r, include=TRUE, fig.cap="Kaplain-Meier Curves by Sex for Candidate Risk Factors"}
 plot_km_curves
 ```
 
-After AIC-based backward selection, the male model retained smoking status in addition to the fixed covariates, whereas the female model retained only the fixed covariates. For interpretability and comparability across sexes, the final reporting models for both males and females included age, diabetes status, systolic blood pressure, and smoking status. Both models were assessed for violations of the proportional hazards assumption. Visual inspection of the plots of the Schoenfled residuals did not show signs of any violations and statistical tests of the residuals for the male (p = 0.345) and female (p = 0.979) models did not provide significant evidence of a violation. Estimated hazard ratios are shown in *Table 2*. Among males, age (p < 0.001), diabetes (p < 0.001), systolic blood pressure (p < 0.001), and smoking status (p = 0.038) were significantly associated with the hazard of stroke. For males and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 92% (3%, 257%) higher hazard of stroke. Among females, age (p < 0.001) and systolic blood pressure (p < 0.001) were significantly associated with stroke hazard, while the data provided insufficient evidence of a significant association for diabetes (p = 0.254) or smoking status (p = 0.207). For females and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 44% (-18%, 252%) higher hazard of stroke.
+After AIC-based backward selection, the male model retained smoking status in addition to the fixed covariates, whereas the female model retained only the fixed covariates. For interpretability and comparability across sexes, the final reporting models for both males and females included age, diabetes status, systolic blood pressure, and smoking status. Both models were assessed for violations of the proportional hazards assumption. Visual inspection of the plots of the Schoenfled residuals did not show signs of any violations and statistical tests of the residuals for the male (p = 0.345) and female (p = 0.979) models did not provide significant evidence of a violation. Estimated hazard ratios are shown in *Table 2*. Among males, age (p \< 0.001), diabetes (p \< 0.001), systolic blood pressure (p \< 0.001), and smoking status (p = 0.038) were significantly associated with the hazard of stroke. For males and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 92% (3%, 257%) higher hazard of stroke. Among females, age (p \< 0.001) and systolic blood pressure (p \< 0.001) were significantly associated with stroke hazard, while the data provided insufficient evidence of a significant association for diabetes (p = 0.254) or smoking status (p = 0.207). For females and adjusting for age, diabetes, and systolic blood pressure, smoking was associated with a 44% (-18%, 252%) higher hazard of stroke.
 
 ```{r, include=TRUE}
 table_model_coef
@@ -568,7 +564,6 @@ An exploratory assessment of covariates across the three clinical examinations i
 
 `C:\Users\josep\OneDrive\AdvancedData\BIOS6624\Project3\Data\frmgham2.csv`
 
-
 <!-- separate evaluation of males and females -->
 
 <!-- backward selection of model covariates for males and females separately -->
@@ -579,16 +574,18 @@ An exploratory assessment of covariates across the three clinical examinations i
 
 <!-- mention checking proportional hazards assumption -->
 
-
-
 <!-- Do the analysis separately for males and female (the models can be different between sexes if there are different relationships) -->
 
 <!-- Risk factors (baseline only) -->
+
 <!--     include: age, diabetes, blood pressure (systolic) -->
+
 <!--     several risk factors not sure about: coronary heart disease, blood pressure medication, smoking status (current Y/N), total cholesterol, BMI -->
 
 <!-- Exclusion criteria: -->
+
 <!--     only those who have not already had a stroke -->
+
 <!--     check for outliers -->
 
 <!-- only interested in strokes -->
@@ -602,19 +599,20 @@ An exploratory assessment of covariates across the three clinical examinations i
 <!-- censor events outside of the first 10 years of followup -->
 
 <!-- We are mainly interested in estimate 10 year probability of stroke across risk profiles -->
+
 <!--     Ages: 40, 50, 60 -->
+
 <!--     Predict risk for average of continuous variables and 0 for binary separately for males and female -->
 
 <!--     High blood pressure (160 systolic) -->
+
 <!--     diabetes -->
+
 <!--     high blood pressure + diabetes -->
 
 <!--     you decided a risk profile (maybe obese) -->
 
-
 <!-- do our covariates vary over time -->
-
-
 
 <!-- # Reproducible Research -->
 
