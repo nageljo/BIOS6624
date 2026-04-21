@@ -496,10 +496,6 @@ table_time_varying <- (
 
 Strokes are medical emergencies caused by restricted or blocked blood flow to the brain. They are often caused by blood clots or tears in the blood vessels that supply blood to the brain. This analysis investigates the factors that contribute to the 10-year risk of stroke in adults. The data come from the Framingham Heart Study, a prospective study of 5,209 subjects living in Framingham, Massachusetts which began in 1948. The subset used in this analysis includes demographic information as well as risk factors and biological markers of heart disease which were collected during 3 clinical exams approximately 6 years apart. Each subject was also followed for 24 years for medical events related to heart disease: Angina Pectoris, Myocardial Infarction, Atherothrombotic Infarction, Cerebral Hemorrhage (Stroke), and death. The primary goal of this analysis is to identify risk factors of stroke and characterize the 10-year probability of stroke across specific risk profiles. Specifically, we will investigate the relationship between stroke and several potential risk factors: coronary heart disease (CHD), blood pressure medication, smoking status, total cholesterol, and body mass index (BMI). We will then model the 10-year probability of stroke separately for males and females as a function of baseline age, diabetes status, blood pressure and any additional risk factors we have identified. We will additionally investigate how the risk factors vary over time and any implications that variability might have for the results of the analysis.
 
-<!-- # Preliminary Methods -->
-
-<!-- All subjects with a history of stroke prior to baseline will be excluded from this analysis. The primary outcome is stroke within a 10-year follow-up period. Participants experiencing non-stroke events (e.g., Angina Pectoris, Myocardial Infarction, death) or remaining stroke-free beyond 10 years will be censored. Following an assessment for outliers and missing data, a complete case analysis will be performed, with baseline characteristics and events summarized by sex in Table 1. Cox Proportional Hazards models will be created separately for males and females. Age, diabetes status, and blood pressure will be maintained as fixed covariates in all models. We will then use AIC-based backward selection to evaluate coronary heart disease, BP medication, smoking status, total cholesterol, and BMI as potential risk factors of stroke. The proportional hazards model assumption will be validated using Kaplan-Meier survival curves and Grambsch-Therneau tests of Schoenfeld residuals. The fitted models will be used to estimate the 10-year probability of stroke across five distinct risk profiles. We will establish a baseline profile defined as an individual who is a non-smoker, does not have diabetes or CHD, and does not use BP medication, with total cholesterol, BMI, and blood pressure set at population averages. We will then compare this baseline to profiles reflecting individuals with high blood pressure (BP=160), diabetes, both high blood pressure and diabetes, and those classified as obese (BMI=30). Finally, an exploratory analysis of the longitudinal changes in diabetes and blood pressure will be conducted to evaluate the necessity of a time-varying covariate modeling approach. -->
-
 # Methods
 
 The analysis population included all participants in the Framingham cohort with no history of stroke at baseline; individuals with a prior stroke were excluded. Follow-up time was truncated at 10 years, and any observation time beyond 10 years was treated as censored at 10 years. For participants who experienced non-fatal, non-stroke events within the first 10 years (e.g., angina pectoris or myocardial infarction), follow-up continued, and fatal events were treated as censoring events. The primary risk factors of interest in this analysis were CHD, blood pressure medication, smoking status, total cholesterol, and BMI. All analysis variables were evaluated for missingness and outliers. A table of descriptive statistics of the analysis dataset was created. Additionally, all analyses were stratified by sex.
@@ -563,63 +559,3 @@ An exploratory assessment of covariates across the three clinical examinations i
 ## Dataset Filepath
 
 `C:\Users\josep\OneDrive\AdvancedData\BIOS6624\Project3\Data\frmgham2.csv`
-
-<!-- separate evaluation of males and females -->
-
-<!-- backward selection of model covariates for males and females separately -->
-
-<!-- descriptive investigation of how covariates change with time () -->
-
-<!-- estimate risk (probability) of stroke for specific profiles -->
-
-<!-- mention checking proportional hazards assumption -->
-
-<!-- Do the analysis separately for males and female (the models can be different between sexes if there are different relationships) -->
-
-<!-- Risk factors (baseline only) -->
-
-<!--     include: age, diabetes, blood pressure (systolic) -->
-
-<!--     several risk factors not sure about: coronary heart disease, blood pressure medication, smoking status (current Y/N), total cholesterol, BMI -->
-
-<!-- Exclusion criteria: -->
-
-<!--     only those who have not already had a stroke -->
-
-<!--     check for outliers -->
-
-<!-- only interested in strokes -->
-
-<!-- We can treat events other than stroke as censored -->
-
-<!-- we need descriptives of how predictors vary over time (we are not doing a time varying analysis) -->
-
-<!-- Only check time varying for diabetes and blood pressure (use descriptives and interpret how a time varying analysis may change results) -->
-
-<!-- censor events outside of the first 10 years of followup -->
-
-<!-- We are mainly interested in estimate 10 year probability of stroke across risk profiles -->
-
-<!--     Ages: 40, 50, 60 -->
-
-<!--     Predict risk for average of continuous variables and 0 for binary separately for males and female -->
-
-<!--     High blood pressure (160 systolic) -->
-
-<!--     diabetes -->
-
-<!--     high blood pressure + diabetes -->
-
-<!--     you decided a risk profile (maybe obese) -->
-
-<!-- do our covariates vary over time -->
-
-<!-- # Reproducible Research -->
-
-<!-- ## GitHub Link -->
-
-<!-- `https://github.com/nageljo/BIOS6624` -->
-
-<!-- ## Dataset Filepath -->
-
-<!-- `C:\Users\josep\OneDrive\AdvancedData\BIOS6624\Project3\Data\frmgham2.csv` -->
