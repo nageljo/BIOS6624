@@ -1,0 +1,91 @@
+---
+title: "Project 4 Report"
+author: "Joe Nagel"
+date: ""
+output: 
+  pdf_document:
+    number_sections: true
+fontsize: 12pt
+mainfont: Helvetica
+geometry: margin=1in
+header-includes:
+  - \usepackage{float}
+  - \usepackage{setspace}
+  - \doublespacing
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
+```
+
+```{r}
+# read in packages
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(hdrm)
+```
+
+```{r}
+# data simulation parameters
+replications = 10000
+ns = c(250, 500)
+rhos = c(0, 0.35, 0.7)
+
+seed = 4130
+nvar = 20
+beta = c(
+    (1:5)/6,
+    rep(0, 15)
+)
+family = "gaussian"
+correlation_structure = "exchangeable"
+```
+
+```{r}
+set.seed(4130)
+tic()
+simulated_data = (
+    expand_grid(
+        replication = 1:replications,
+        n = ns,
+        rho = rhos,
+        .vary = "fastest"
+    )
+    %>% mutate(
+        simulated_data = pmap(
+            list(n, rho),
+            \(n, rho) gen_data(
+                n = n,
+                p = nvar,
+                beta = beta,
+                family = family,
+                corr = correlation_structure,
+                rho = rho
+            )
+        )
+    )
+)
+toc()
+```
+
+
+```{r}
+gen_data()
+```
+
+
+
+# Introduction
+
+# Methods
+
+# Results
+
+# Discussion and Conclusion
+
+# Reproducible Research
+
+## GitHub Link
+
+`https://github.com/nageljo/BIOS6624`
