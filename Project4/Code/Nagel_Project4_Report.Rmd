@@ -24,44 +24,59 @@ library(tidyverse)
 library(knitr)
 library(kableExtra)
 library(hdrm)
+library(tictoc)
+library(olsrr)
+library(glmnet)
+library(broom)
+source("backwards_selection.R")
 ```
 
 ```{r}
-# data simulation parameters
-replications = 10000
-ns = c(250, 500)
-rhos = c(0, 0.35, 0.7)
-
-seed = 4130
-nvar = 20
-beta = c(
-    (1:5)/6,
-    rep(0, 15)
+# define simulation parameters
+params = list(
+    replications = 10,
+    n = c(250, 500),
+    p = 20,
+    beta = c((1:5)/6, rep(0, 15)),
+    rho = c(0, 0.35, 0.7),
+    alpha = 0.5,
+    p_val = 0.15,
+    nvar = length(beta),
+    family = "gaussian",
+    correlation_structure = "exchangeable",
+    seed = 4130
 )
-family = "gaussian"
-correlation_structure = "exchangeable"
+params$nvar = length(params$beta)
 ```
 
 ```{r}
-set.seed(4130)
+set.seed(params$seed)
 tic()
 simulated_data = (
     expand_grid(
-        replication = 1:replications,
-        n = ns,
-        rho = rhos,
-        .vary = "fastest"
+        .vary = "fastest",
+        replication = 1:params$replications,
+        n = params$n,
+        rho = params$rho
     )
     %>% mutate(
         simulated_data = pmap(
             list(n, rho),
             \(n, rho) gen_data(
                 n = n,
-                p = nvar,
-                beta = beta,
-                family = family,
-                corr = correlation_structure,
+                p = params$nvar,
+                beta = params$beta,
+                family = params$family,
+                corr = params$correlation_structure,
                 rho = rho
+            )
+        ),
+        reduced_models = map(
+            simulated_data,
+            \(simulated_data) get_reduced_models(
+                simulated_data = simulated_data,
+                alpha = params$alpha,
+                p_val = params$p_val
             )
         )
     )
@@ -69,11 +84,9 @@ simulated_data = (
 toc()
 ```
 
-
 ```{r}
-gen_data()
+simulated_data
 ```
-
 
 
 # Introduction
