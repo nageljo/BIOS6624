@@ -28,7 +28,9 @@ library(tictoc)
 library(olsrr)
 library(glmnet)
 library(broom)
-source("backwards_selection.R")
+library(janitor)
+library(furrr)
+source("model_selection.R")
 ```
 
 ```{r}
@@ -50,42 +52,78 @@ params$nvar = length(params$beta)
 ```
 
 ```{r}
-set.seed(params$seed)
+run_simulation <- function(n, rho, params) {
+    simulated_data <- gen_data(
+        n = n,
+        rho = rho,
+        p = params$nvar,
+        beta = params$beta,
+        family = params$family,
+        corr = params$correlation_structure
+    )
+    
+    reduced_models = get_reduced_models(
+        simulated_data = simulated_data,
+        alpha = params$alpha,
+        p_val = params$p_val
+    )
+    
+    output = (
+        map(reduced_models, ~broom::tidy(., conf.int = TRUE))
+        %>% bind_rows(.id = "selection_method")
+        %>% select(-c(std.error, statistic))
+    )
+    
+    return(output)
+}
+```
+
+
+```{r}
 tic()
-simulated_data = (
+
+set.seed(params$seed)
+
+plan(multisession, workers = parallel::detectCores() - 1)
+simulation_results = (
     expand_grid(
-        .vary = "fastest",
-        replication = 1:params$replications,
         n = params$n,
-        rho = params$rho
+        rho = params$rho,
+        replication = 1:params$replications
     )
     %>% mutate(
-        simulated_data = pmap(
-            list(n, rho),
-            \(n, rho) gen_data(
-                n = n,
-                p = params$nvar,
-                beta = params$beta,
-                family = params$family,
-                corr = params$correlation_structure,
-                rho = rho
-            )
-        ),
-        reduced_models = map(
-            simulated_data,
-            \(simulated_data) get_reduced_models(
-                simulated_data = simulated_data,
-                alpha = params$alpha,
-                p_val = params$p_val
-            )
+        result = future_map2(
+            n, rho,
+            \(n, rho) run_simulation(n, rho, params = params),
+            .options = furrr_options(seed = TRUE)
         )
     )
+    %>% unnest(result)
+    %>% janitor::clean_names()
 )
+plan(sequential)
+
+saveRDS(params, file = "../Data/simulation_parameters.rds")
+write_csv(simulation_results, "../Data/simulation_results.csv")
+
 toc()
 ```
 
 ```{r}
-simulated_data
+simulation_results
+```
+
+```{r}
+df <- gen_data(
+        n = 250,
+        rho = 0,
+        p = params$nvar,
+        beta = params$beta,
+        family = params$family,
+        corr = params$correlation_structure
+    )
+mod <- lm(y ~ 0, data = data.frame(y = df$y, df$X))
+tidy(mod)
 ```
 
 
