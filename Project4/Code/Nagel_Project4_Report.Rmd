@@ -23,107 +23,15 @@ knitr::opts_chunk$set(list(echo = FALSE, include = FALSE))
 library(tidyverse)
 library(knitr)
 library(kableExtra)
-library(hdrm)
-library(tictoc)
-library(olsrr)
-library(glmnet)
-library(broom)
-library(janitor)
-library(furrr)
-source("model_selection.R")
 ```
 
 ```{r}
-# define simulation parameters
-params = list(
-    replications = 10,
-    n = c(250, 500),
-    p = 20,
-    beta = c((1:5)/6, rep(0, 15)),
-    rho = c(0, 0.35, 0.7),
-    alpha = 0.5,
-    p_val = 0.15,
-    nvar = length(beta),
-    family = "gaussian",
-    correlation_structure = "exchangeable",
-    seed = 4130
-)
-params$nvar = length(params$beta)
+sim <- read_csv("../Data/simulation_results.csv", show_col_types = FALSE)
+params <- readRDS("../Data/simulation_parameters.rds")
 ```
 
 ```{r}
-run_simulation <- function(n, rho, params) {
-    simulated_data <- gen_data(
-        n = n,
-        rho = rho,
-        p = params$nvar,
-        beta = params$beta,
-        family = params$family,
-        corr = params$correlation_structure
-    )
-    
-    reduced_models = get_reduced_models(
-        simulated_data = simulated_data,
-        alpha = params$alpha,
-        p_val = params$p_val
-    )
-    
-    output = (
-        map(reduced_models, ~broom::tidy(., conf.int = TRUE))
-        %>% bind_rows(.id = "selection_method")
-        %>% select(-c(std.error, statistic))
-    )
-    
-    return(output)
-}
-```
-
-
-```{r}
-tic()
-
-set.seed(params$seed)
-
-plan(multisession, workers = parallel::detectCores() - 1)
-simulation_results = (
-    expand_grid(
-        n = params$n,
-        rho = params$rho,
-        replication = 1:params$replications
-    )
-    %>% mutate(
-        result = future_map2(
-            n, rho,
-            \(n, rho) run_simulation(n, rho, params = params),
-            .options = furrr_options(seed = TRUE)
-        )
-    )
-    %>% unnest(result)
-    %>% janitor::clean_names()
-)
-plan(sequential)
-
-saveRDS(params, file = "../Data/simulation_parameters.rds")
-write_csv(simulation_results, "../Data/simulation_results.csv")
-
-toc()
-```
-
-```{r}
-simulation_results
-```
-
-```{r}
-df <- gen_data(
-        n = 250,
-        rho = 0,
-        p = params$nvar,
-        beta = params$beta,
-        family = params$family,
-        corr = params$correlation_structure
-    )
-mod <- lm(y ~ 0, data = data.frame(y = df$y, df$X))
-tidy(mod)
+head(sim)
 ```
 
 
