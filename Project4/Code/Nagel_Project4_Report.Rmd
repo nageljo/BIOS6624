@@ -154,11 +154,11 @@ In statistical analysis, defining a statistical model often requires choosing pr
 
 # Preliminary Methods
 
-This analysis will use simulation to compare five different methods for variable selection: backwards selection based on p-values (from F-tests), AIC, and BIC as well as 
+This analysis will use simulation to compare five different methods for variable selection: backwards selection based on p-values (from F-tests), AIC, and BIC as well as lasso regression and elastic net regression with mixing parameter to $\alpha = 0.5$. For the lasso and elastic net approaches, we will use 10-fold cross validation to select the penalty parameter $\lambda$ based on the out-of-fold mean square error.
 
 # Preliminary Results
 
-# Discussion and Conclusion
+<!-- # Discussion and Conclusion -->
 
 # Reproducible Research
 
