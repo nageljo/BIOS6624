@@ -26,12 +26,124 @@ library(kableExtra)
 ```
 
 ```{r}
-sim <- read_csv("../Data/simulation_results.csv", show_col_types = FALSE)
+# read in experiment results
 params <- readRDS("../Data/simulation_parameters.rds")
+sim <- (
+    read_csv("../Data/simulation_results.csv", show_col_types = FALSE)
+    %>% mutate(
+        selection_method = factor(
+            selection_method,
+            levels = c(
+                "p",
+                "aic",
+                "bic",
+                "lasso_min",
+                "elanet_min",
+                "lasso_1se",
+                "elanet_1se"
+            )
+        )
+    )
+)
 ```
 
 ```{r}
-head(sim)
+(
+    expand_grid(
+        n = params$n,
+        rho = params$rho,
+        replication = seq_len(params$replications),
+        selection_method = c(
+            "p",
+            "aic",
+            "bic",
+            "lasso_min",
+            "elanet_min",
+            "lasso_1se",
+            "elanet_1se"
+        ),
+        term = paste0("V", sprintf("%02d", 1:20))
+    )
+    %>% left_join(sim)
+    %>% mutate(
+        .after = term,
+        true_effect = recode_values(
+            term,
+            from = paste0("V", sprintf("%02d", 1:20)),
+            to = params$beta
+        ),
+        p_value = replace_na(p_value, 1)
+    )
+    %>% mutate(across(c(estimate, conf_low, conf_high), ~replace_na(., 0)))
+)
+```
+
+
+```{r}
+(
+    sim
+    %>% summarise(
+        .by = c(n, rho, selection_method, term),
+        prop_selected = n()/params$replications
+    )
+    %>% arrange(term)
+    %>% pivot_wider(
+        names_from = term,
+        values_from = prop_selected
+    )
+    %>% mutate(.keep = "unused", V06_V20 = rowMeans(across(V06:V20)))
+    %>% arrange(n, selection_method, rho)
+)
+```
+
+```{r}
+# create confusion matrix
+positive = paste0("V", sprintf("%02d", 1:5))
+negative = paste0("V", sprintf("%02d", 6:20))
+(
+    sim
+    %>% group_by(n, rho, selection_method, replication)
+    %>% summarise(
+        true_positive = all(positive %in% term),
+        false_positive = any(negative %in% term),
+        .groups = "drop_last"
+    )
+    %>% summarise(
+        tpr = mean(true_positive), 
+        tnr = 1 - mean(false_positive),
+        .groups = "drop"
+    )
+    %>% pivot_longer(cols = c(tpr, tnr))
+    %>% ggplot(aes(x = paste(n, rho, sep = "\n"), y = selection_method, fill = value))
+        + geom_tile(color = "white")
+        + geom_text(
+            aes(
+                label = round(value, 2),
+                color = value < 0.5
+            ),
+            size = 3
+        )
+        + scale_color_manual(
+            values = c("TRUE" = "white", "FALSE" = "black"),
+            guide = "none"
+        )
+        + facet_wrap(
+            ~ name,
+            labeller = labeller(
+                name = c(
+                    tpr = "True Positive Rate",
+                    tnr = "True Negative Rate"
+                )
+            )
+        )
+        + scale_y_discrete(limits = rev)
+        + scale_fill_viridis_c(name = "Rate", limits = c(0, 1))
+        + theme_minimal()
+        + labs(
+            x = "Sample Size\nCorrelation",
+            y = "Selection Method"
+        )
+)
 ```
 
 
