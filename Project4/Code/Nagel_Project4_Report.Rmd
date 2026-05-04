@@ -42,7 +42,8 @@ sim <- (
                 "lasso_1se",
                 "elanet_1se"
             )
-        )
+        ),
+        selected = TRUE
     )
 )
 ```
@@ -64,7 +65,7 @@ sim <- (
         ),
         term = paste0("V", sprintf("%02d", 1:20))
     )
-    %>% left_join(sim)
+    %>% left_join(sim, by = join_by(n, rho, replication, selection_method, term))
     %>% mutate(
         .after = term,
         true_effect = recode_values(
@@ -149,9 +150,13 @@ negative = paste0("V", sprintf("%02d", 6:20))
 
 # Introduction
 
-# Methods
+In statistical analysis, defining a statistical model often requires choosing predictors and/or covaraiates from a large set of varaiables. In controlled settings such as clinical trials, explanatory variables, covariates, and the corresponding final model can be defined a priori. However, in cases where such a procedure is not possible, variable selection, the process of choosing a set of variables relevant to the outcome of interest, is often required. The most straight forward method for variable selection is to fit all possible combinations of the candidate predictors and choose a final model based on a measure of model fit; common measures include quantifications of predictive capability like mean square error, likelihood based measures such as Akaike Information Criterion (AIC) and Bayesian Information Criterion (BIC), and statistical comparisons of model fits with F-tests. However, this approach is only feasible for analyses with a relatively small pool of candidate predictors. Backwards selection is a common approach that overcomes this problem by fitting a model will all candidates comparing it to reduced models excluding one predictor at a time. The model with the best fit is selected and this process is repeated until no predictors remain or the model fit cannot be improved by removing a predictor. Another approach is to place an L1 penalty on the vector of regression coefficients ($\beta$). The results in the shrinkage of some coefficients to zero, effectively removing the corresponding variable from the model. This can be done using only an L1 penalty (lasso regression) or a mix of L1 and L2 penalties (elastic net regression). While these approaches often result in more parsimonious models, they can overfit to noise in the dataset and do not account for the selection procedure during model inference. This analysis will explore how these approaches perform in an array of simulated scenarios. Specifically, we will compare the performance of each method while varying sample size and the correlation between variables. Performance will be measured by assessing each methods ability to first capture variables with a true relationship with the outcome and non-important variables and then produce valid inference for the selected variables.
 
-# Results
+# Preliminary Methods
+
+This analysis will use simulation to compare five different methods for variable selection: backwards selection based on p-values (from F-tests), AIC, and BIC as well as 
+
+# Preliminary Results
 
 # Discussion and Conclusion
 
