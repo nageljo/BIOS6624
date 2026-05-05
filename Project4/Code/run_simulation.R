@@ -11,7 +11,7 @@ params = list(
     beta = c((1:5)/6, rep(0, 15)),
     rho = c(0, 0.35, 0.7),
     alpha = 0.5,
-    p_val = 0.15,
+    p_val = 0.05,
     nvar = length(beta),
     family = "gaussian",
     correlation_structure = "exchangeable",
@@ -30,7 +30,7 @@ run_simulation <- function(n, rho, params) {
         corr = params$correlation_structure
     )
     
-    reduced_models = get_reduced_models(
+    reduced_models <- get_reduced_models(
         simulated_data = simulated_data,
         alpha = params$alpha,
         p_val = params$p_val

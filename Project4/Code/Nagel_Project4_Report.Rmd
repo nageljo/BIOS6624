@@ -105,16 +105,16 @@ negative = paste0("V", sprintf("%02d", 6:20))
     sim
     %>% group_by(n, rho, selection_method, replication)
     %>% summarise(
-        true_positive = all(positive %in% term),
-        false_positive = any(negative %in% term),
+        true_positive = mean(positive %in% term),
+        false_positive = mean(negative %in% term),
         .groups = "drop_last"
     )
     %>% summarise(
-        tpr = mean(true_positive), 
-        tnr = 1 - mean(false_positive),
+        prop_true = mean(true_positive), 
+        prop_false = mean(false_positive),
         .groups = "drop"
     )
-    %>% pivot_longer(cols = c(tpr, tnr))
+    %>% pivot_longer(cols = c(prop_true, prop_false))
     %>% ggplot(aes(x = paste(n, rho, sep = "\n"), y = selection_method, fill = value))
         + geom_tile(color = "white")
         + geom_text(
@@ -132,8 +132,8 @@ negative = paste0("V", sprintf("%02d", 6:20))
             ~ name,
             labeller = labeller(
                 name = c(
-                    tpr = "True Positive Rate",
-                    tnr = "True Negative Rate"
+                    prop_true = "Proportion of Associated Variables Selected",
+                    prop_false = "Proportion of Non-associated Variables Selected"
                 )
             )
         )
@@ -154,7 +154,23 @@ In statistical analysis, defining a statistical model often requires choosing pr
 
 # Preliminary Methods
 
-This analysis will use simulation to compare five different methods for variable selection: backwards selection based on p-values (from F-tests), AIC, and BIC as well as lasso regression and elastic net regression with mixing parameter to $\alpha = 0.5$. For the lasso and elastic net approaches, we will use 10-fold cross validation to select the penalty parameter $\lambda$ based on the out-of-fold mean square error.
+The purpose of this analysis is to explore the performance of different variable selection methods across differing sample sizes and correlations. Specifically, we will create simulated datasets with the following form:
+
+$$
+\begin{align*}
+    y_i = \mathbf{x}_i \boldsymbol{\beta} + \epsilon_i
+\end{align*}
+$$
+where
+
+* $i \in \{1, 2, \dots, n\}$ for $n \in \{250, 500\}$
+* $\boldsymbol{\Sigma}\ \in \mathbb{R}^{20 \times 20}$ has an exchangeable correlation structure with $\rho \in \{ 0, 0.35, 0.70\}$
+* $\mathbf{x}_i \sim MVN(\boldsymbol{0}, \boldsymbol{\Sigma});\mathbf{x}_i \in \mathbb{R}^{20}$
+* $\boldsymbol{\beta} = \begin{pmatrix} \frac{1}{6} & \frac{2}{6} & \frac{3}{6} & \frac{4}{6} & \frac{5}{6} & 0 & \dots & 0 \end{pmatrix} \in \mathbb{R}^{20}$
+* $\epsilon_i \sim N(0, 1)$
+
+
+This analysis will use simulation to compare five different methods for variable selection: backwards selection based on p-values (from F-tests), AIC, and BIC as well as lasso regression and elastic net regression with mixing parameter to $\alpha = 0.5$. For the lasso and elastic net approaches, we will use 10-fold cross validation to select the penalty parameter, $\lambda$, based on the average out-of-fold mean square error (MSE) and will compare the $\lambda$ that achieved the minimum MSE with the largest $\lambda$ within one standard error of the minimum.
 
 # Preliminary Results
 
