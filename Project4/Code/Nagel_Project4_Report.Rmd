@@ -28,30 +28,13 @@ library(kableExtra)
 ```{r}
 # read in experiment results
 params <- readRDS("../Data/simulation_parameters.rds")
+simulation_results_path = "../Data/simulation_results.csv"
 nonzero_coefs <- str_c("V", str_pad(1:5, width = 2, pad = "0"))
 zero_coefs <- str_c("V", str_pad(6:20, width = 2, pad = "0"))
-sim <- (
-    read_csv("../Data/simulation_results.csv", show_col_types = FALSE)
-    %>% mutate(
-        selection_method = factor(
-            selection_method,
-            levels = c(
-                "p",
-                "aic",
-                "bic",
-                "lasso_min",
-                "elanet_min",
-                "lasso_1se",
-                "elanet_1se"
-            )
-        ),
-        selected = TRUE
-    )
-)
 ```
 
 ```{r}
-(
+summaries <- (
     expand_grid(
         n = params$n,
         rho = params$rho,
@@ -67,10 +50,37 @@ sim <- (
         ),
         term = paste0("V", sprintf("%02d", 1:20))
     )
-    %>% left_join(sim, by = join_by(n, rho, replication, selection_method, term))
+    %>% left_join(
+        y = read_csv(
+            simulation_results_path,
+            show_col_types = FALSE
+        ) %>% mutate(selected = TRUE),
+        by = join_by(n, rho, replication, selection_method, term)
+    )
     %>% mutate(across(c(estimate, conf_low, conf_high), ~replace_na(., 0)))
     %>% mutate(
         .after = term,
+        selection_method = factor(
+            selection_method,
+            levels = c(
+                "p",
+                "aic",
+                "bic",
+                "lasso_min",
+                "lasso_1se",
+                "elanet_min",
+                "elanet_1se"
+            ),
+            labels = c(
+                "Backward (p)",
+                "Backward (AIC)",
+                "Backward (BIC)",
+                "Lasso (min)",
+                "Lasso (1-SE)",
+                "Ela. Net (min)",
+                "Ela. Net (1-SE)"
+            )
+        ),
         selected = replace_na(selected, FALSE),
         p_value = replace_na(p_value, 1),
         true_effect = recode_values(
@@ -84,48 +94,76 @@ sim <- (
             term %in% nonzero_coefs & p_value > 0.05 ~ TRUE,
             term %in% zero_coefs & p_value <= 0.05 ~ TRUE,
             .default = FALSE
+        ),
+        true_effect_str = recode_values(
+            term,
+            from = paste0("V", sprintf("%02d", 1:20)),
+            to = c("1/6", "2/6", "3/6", "4/6", "5/6", rep("0/6", 15))
         )
     )
     %>% summarise(
-        .by = c(n, rho, selection_method, term),
+        .by = c(n, rho, selection_method, true_effect_str),
         bias = mean(bias),
         coverage = mean(covered),
         error = mean(error),
         prop_selected = mean(selected)
     )
-    %>% pivot_longer(
-        cols = c(bias, coverage, error, prop_selected),
-        names_to = "measure"
-    )
-    %>% pivot_wider(
-        names_from = term,
-        values_from = value
-    )
-    %>% mutate(.keep = "unused", V06_V20 = rowMeans(across(V06:V20)))
-    %>% arrange(n, selection_method, measure, rho)
-    %>% filter(measure == "coverage")
+    %>% arrange(n, rho, selection_method, true_effect_str)
 )
 ```
 
+```{r}
+# create table of bias and coverage values
+table_bias_coverage <- (
+    summaries
+    %>% select(-c(error, prop_selected))
+    %>% pivot_wider(
+       names_from = true_effect_str,
+       values_from = c(bias, coverage)
+    )
+    %>% select(-c(n, rho))
+    %>% kable(
+        format = "latex",
+        booktabs = TRUE,
+        linesep  = "",
+        caption  = "Bias and Coverage across Effect Size",
+        digits = 3,
+        # align = rep("c", 13),
+        col.names = c(
+            "Method",
+            "0", "1/6", "2/6", "3/6", "4/6", "5/6",
+            "0", "1/6", "2/6", "3/6", "4/6", "5/6"
+        )
+    )
+    %>% add_header_above(header = c(" " = 1, "Bias" = 6, "Coverage (Wald 95% CI)" = 6), bold = TRUE)
+    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
+    %>% pack_rows("n = 250", 1, 21)
+    %>% pack_rows("n = 500", 22, 42)
+    %>% pack_rows("$\\rho$ = 0.00", 1, 7, indent = TRUE, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.35", 8, 14, indent = TRUE, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.70", 15, 21, indent = TRUE, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.00", 22, 28, indent = TRUE, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.35", 29, 35, indent = TRUE, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.70", 36, 42, indent = TRUE, escape = FALSE)
+)
+```
+
+```{r, include=TRUE}
+table_bias_coverage
+```
 
 ```{r}
 (
-    sim
-    %>% summarise(
-        .by = c(n, rho, selection_method, term),
-        prop_selected = n()/params$replications
-    )
-    %>% arrange(term)
+    summaries
+    %>% select(-c(bias, coverage, prop_selected))
     %>% pivot_wider(
-        names_from = term,
-        values_from = prop_selected
+        
     )
-    %>% mutate(.keep = "unused", V06_V20 = rowMeans(across(V06:V20)))
-    %>% arrange(n, selection_method, rho)
 )
 ```
 
-```{r}
+
+```{r, eval=FALSE}
 # create confusion matrix
 (
     sim
