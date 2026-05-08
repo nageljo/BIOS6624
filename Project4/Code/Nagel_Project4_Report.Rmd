@@ -48,7 +48,7 @@ summaries <- (
             "lasso_1se",
             "elanet_1se"
         ),
-        term = paste0("V", sprintf("%02d", 1:20))
+        term = c(nonzero_coefs, zero_coefs)
     )
     %>% left_join(
         y = read_csv(
@@ -72,7 +72,7 @@ summaries <- (
                 "elanet_1se"
             ),
             labels = c(
-                "Backward (p)",
+                "Backward ($p$)",
                 "Backward (AIC)",
                 "Backward (BIC)",
                 "Lasso (min)",
@@ -85,7 +85,7 @@ summaries <- (
         p_value = replace_na(p_value, 1),
         true_effect = recode_values(
             term,
-            from = paste0("V", sprintf("%02d", 1:20)),
+            from = c(nonzero_coefs, zero_coefs),
             to = params$beta
         ),
         bias = estimate - true_effect,
@@ -93,11 +93,13 @@ summaries <- (
         error = case_when(
             term %in% nonzero_coefs & p_value > 0.05 ~ TRUE,
             term %in% zero_coefs & p_value <= 0.05 ~ TRUE,
+            # term %in% nonzero_coefs & !selected ~ TRUE,
+            # term %in% zero_coefs & selected ~ TRUE,
             .default = FALSE
         ),
         true_effect_str = recode_values(
             term,
-            from = paste0("V", sprintf("%02d", 1:20)),
+            from = c(nonzero_coefs, zero_coefs),
             to = c("1/6", "2/6", "3/6", "4/6", "5/6", rep("0/6", 15))
         )
     )
@@ -117,6 +119,7 @@ summaries <- (
 table_bias_coverage <- (
     summaries
     %>% select(-c(error, prop_selected))
+    %>% mutate(across(c(bias, coverage), ~sprintf("%.03f", .)))
     %>% pivot_wider(
        names_from = true_effect_str,
        values_from = c(bias, coverage)
@@ -127,24 +130,26 @@ table_bias_coverage <- (
         booktabs = TRUE,
         linesep  = "",
         caption  = "Bias and Coverage across Effect Size",
-        digits = 3,
-        # align = rep("c", 13),
+        format.args = list(nsmall = 3),
         col.names = c(
             "Method",
             "0", "1/6", "2/6", "3/6", "4/6", "5/6",
             "0", "1/6", "2/6", "3/6", "4/6", "5/6"
-        )
+        ),
+        align = c("l", rep("r", 12)),
+        escape = FALSE
     )
+    %>% row_spec(0, align = "c", bold = TRUE)
     %>% add_header_above(header = c(" " = 1, "Bias" = 6, "Coverage (Wald 95% CI)" = 6), bold = TRUE)
     %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
     %>% pack_rows("n = 250", 1, 21)
     %>% pack_rows("n = 500", 22, 42)
-    %>% pack_rows("$\\rho$ = 0.00", 1, 7, indent = TRUE, escape = FALSE)
-    %>% pack_rows("$\\rho$ = 0.35", 8, 14, indent = TRUE, escape = FALSE)
-    %>% pack_rows("$\\rho$ = 0.70", 15, 21, indent = TRUE, escape = FALSE)
-    %>% pack_rows("$\\rho$ = 0.00", 22, 28, indent = TRUE, escape = FALSE)
-    %>% pack_rows("$\\rho$ = 0.35", 29, 35, indent = TRUE, escape = FALSE)
-    %>% pack_rows("$\\rho$ = 0.70", 36, 42, indent = TRUE, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.00", 1, 7, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.35", 8, 14, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.70", 15, 21, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.00", 22, 28, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.35", 29, 35, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.70", 36, 42, escape = FALSE)
 )
 ```
 
@@ -153,14 +158,50 @@ table_bias_coverage
 ```
 
 ```{r}
-(
+table_error <- (
     summaries
     %>% select(-c(bias, coverage, prop_selected))
+    %>% mutate(error = sprintf("%.3f", error))
     %>% pivot_wider(
-        
+        names_from = c(n, true_effect_str),
+        values_from = error
     )
+    %>% select(-rho)
+    %>% kable(
+        format = "latex",
+        booktabs = TRUE,
+        linesep  = "",
+        caption  = "Type I and II Error Rates across Effect Size",
+        format.args = list(nsmall = 3),
+        col.names = c(
+            "Method",
+            "0", "1/6", "2/6", "3/6", "4/6", "5/6",
+            "0", "1/6", "2/6", "3/6", "4/6", "5/6"
+        ),
+        align = c("l", rep("r", 12)),
+        escape = FALSE
+    )
+    %>% row_spec(0, align = "c", bold = TRUE)
+    %>% add_header_above(
+        header = c(
+            " " = 1,
+            "Type I" = 1, "Type II" = 5,
+            "Type I" = 1, "Type II" = 5
+        ),
+        bold = TRUE
+    )
+    %>% add_header_above(header = c(" " = 1, "n = 250" = 6, "n = 500" = 6), bold = TRUE)
+    %>% kable_styling(latex_options = c("scale_down", "HOLD_position"))
+    %>% pack_rows("$\\rho$ = 0.00", 1, 7, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.35", 8, 14, escape = FALSE)
+    %>% pack_rows("$\\rho$ = 0.70", 15, 21, escape = FALSE)
 )
 ```
+
+```{r, include=TRUE}
+table_error
+```
+
 
 
 ```{r, eval=FALSE}
