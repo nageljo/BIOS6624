@@ -202,24 +202,42 @@ table_error <- (
 table_error
 ```
 
-
-
-```{r, eval=FALSE}
-# create confusion matrix
+```{r}
 (
-    sim
-    %>% group_by(n, rho, selection_method, replication)
-    %>% summarise(
-        true_positive = mean(nonzero_coefs %in% term),
-        false_positive = mean(zero_coefs %in% term),
-        .groups = "drop_last"
+    summaries
+    %>% arrange(n, rho, selection_method, true_effect_str)
+    %>% separate(true_effect_str, into = c("num", "den"), sep = "/", remove = FALSE)
+    %>% mutate(
+        .keep = "unused",
+        .after = true_effect_str,
+        true_effect = as.numeric(num) / as.numeric(den)
     )
     %>% summarise(
-        prop_true = mean(true_positive), 
-        prop_false = mean(false_positive),
-        .groups = "drop"
+        .by = c(n, rho, selection_method),
+        prop_no_ass = mean(prop_selected[true_effect == 0]),
+        prop_ass = mean(prop_selected[true_effect > 0])
     )
-    %>% pivot_longer(cols = c(prop_true, prop_false))
+)
+```
+
+
+```{r}
+# create confusion matrix
+figure_heatmap <- (
+    summaries
+    %>% arrange(n, rho, selection_method, true_effect_str)
+    %>% separate(true_effect_str, into = c("num", "den"), sep = "/", remove = FALSE)
+    %>% mutate(
+        .keep = "unused",
+        .after = true_effect_str,
+        true_effect = as.numeric(num) / as.numeric(den)
+    )
+    %>% summarise(
+        .by = c(n, rho, selection_method),
+        prop_no_ass = mean(prop_selected[true_effect == 0]),
+        prop_ass = mean(prop_selected[true_effect > 0])
+    )
+    %>% pivot_longer(cols = c(prop_ass, prop_no_ass))
     %>% ggplot(aes(x = str_c(n, "\n", rho), y = selection_method, fill = value))
         + geom_tile(color = "white")
         + geom_text(
@@ -237,21 +255,34 @@ table_error
             ~ name,
             labeller = labeller(
                 name = c(
-                    prop_true = "Proportion of Associated Variables Selected",
-                    prop_false = "Proportion of Non-associated Variables Selected"
+                    prop_ass = "Associated Variables",
+                    prop_no_ass = "Non-associated Variables"
                 )
             )
         )
-        + scale_y_discrete(limits = rev)
+        + scale_y_discrete(
+            limits = rev,
+            labels = ~gsub("\\$", "", .)
+        )
         + scale_fill_viridis_c(name = "Rate", limits = c(0, 1))
         + theme_minimal()
         + labs(
             x = "Sample Size\nCorrelation",
             y = "Selection Method"
         )
+        + theme(
+            strip.text = element_text(
+                margin = margin(t = 6, b = 6),
+                hjust = 0.5
+            ),
+            plot.margin = margin(10, 20, 10, 20)
+        )
 )
 ```
 
+```{r, include=TRUE}
+figure_heatmap
+```
 
 # Introduction
 
