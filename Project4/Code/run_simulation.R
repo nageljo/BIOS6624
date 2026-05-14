@@ -15,7 +15,8 @@ params = list(
     nvar = length(beta),
     family = "gaussian",
     correlation_structure = "exchangeable",
-    seed = 4130
+    seed = 4130,
+    version = getRversion()
 )
 params$nvar <- length(params$beta)
 
@@ -85,3 +86,4 @@ params$runtime <- runtime$callback_msg
 # save simulation results
 saveRDS(params, file = "./Project4/Data/simulation_parameters.rds")
 readr::write_csv(simulation_results, "./Project4/Data/simulation_results.csv")
+capture.output(sessionInfo(), file = "./Project4/Code/session_info_simulation.txt")
