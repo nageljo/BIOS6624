@@ -1,5 +1,5 @@
 ---
-title: "Project 4 Report"
+title: "Simulation Study: Variable Selection in Correlated Data"
 author: "Joe Nagel"
 date: ""
 output: 
@@ -75,8 +75,8 @@ summaries <- (
                 "Backward ($p$)",
                 "Backward (AIC)",
                 "Backward (BIC)",
-                "Lasso (min)",
-                "Lasso (1-SE)",
+                "LASSO (min)",
+                "LASSO (1-SE)",
                 "Ela. Net (min)",
                 "Ela. Net (1-SE)"
             )
@@ -93,8 +93,6 @@ summaries <- (
         error = case_when(
             term %in% nonzero_coefs & p_value > 0.05 ~ TRUE,
             term %in% zero_coefs & p_value <= 0.05 ~ TRUE,
-            # term %in% nonzero_coefs & !selected ~ TRUE,
-            # term %in% zero_coefs & selected ~ TRUE,
             .default = FALSE
         ),
         true_effect_str = recode_values(
@@ -160,10 +158,6 @@ table_bias_coverage <- (
 )
 ```
 
-```{r, include=TRUE}
-table_bias_coverage
-```
-
 ```{r}
 table_error <- (
     summaries
@@ -204,10 +198,6 @@ table_error <- (
 )
 ```
 
-```{r, include=TRUE}
-table_error
-```
-
 ```{r}
 table_selected <- (
     summaries
@@ -222,7 +212,7 @@ table_selected <- (
         format = "latex",
         booktabs = TRUE,
         linesep  = "",
-        caption  = "Prop selected",
+        caption  = "Variable Selection Frequency across Effect Size",
         col.names = c(
             "Method",
             "0", "1/6", "2/6", "3/6", "4/6", "5/6",
@@ -238,10 +228,6 @@ table_selected <- (
     %>% pack_rows("$\\rho$ = 0.35", 8, 14, escape = FALSE)
     %>% pack_rows("$\\rho$ = 0.70", 15, 21, escape = FALSE)
 )
-```
-
-```{r, include=TRUE}
-table_selected
 ```
 
 ```{r}
@@ -303,20 +289,52 @@ figure_heatmap <- (
 )
 ```
 
-```{r, include=TRUE}
-figure_heatmap
-```
-
 
 # Introduction
 
-In statistical analysis, defining a statistical model often requires choosing predictors and/or covariates from a large set of variables. In controlled settings such as clinical trials, explanatory variables, covariates, and the corresponding final model can be defined a priori. However, in cases where such a procedure is not possible, variable selection, the process of choosing a set of variables relevant to the outcome of interest, is often required. The most straightforward method for variable selection is to fit all possible combinations of the candidate predictors and choose a final model based on a measure of model fit; common measures include quantifications of predictive capability like mean square error, likelihood based measures such as Akaike Information Criterion (AIC) and Bayesian Information Criterion (BIC), and statistical comparisons of model fits with F-tests. However, this approach is only feasible for analyses with a relatively small pool of candidate predictors. Backward selection is a common approach that overcomes this problem by fitting a model with all candidates comparing it to reduced models excluding one predictor at a time. The model with the best fit is selected and this process is repeated until no predictors remain or the model fit cannot be improved by removing a predictor. Another approach is to place an L1 penalty on the vector of regression coefficients ($\beta$). The results in the shrinkage of some coefficients to zero, effectively removing the corresponding variable from the model. This can be done using only an L1 penalty (lasso regression) or a mix of L1 and L2 penalties (elastic net regression). While these approaches often result in more parsimonious models, they can overfit to noise in the dataset and do not account for the selection procedure during model inference. This analysis will explore how these approaches perform in an array of simulated scenarios. Specifically, we will compare the performance of each method while varying sample size and the correlation between variables. Performance will be measured by assessing each methods ability to first capture variables with a true relationship with the outcome and non-important variables and then produce valid inference for the selected variables.
+In statistical analysis, defining a statistical model often requires choosing predictors and/or covariates from a large set of variables. In controlled settings such as clinical trials, explanatory variables, covariates, and the corresponding final model can be defined a priori. However, in cases where such a procedure is not possible, variable selection, the process of choosing a set of variables relevant to the outcome of interest, is often required. The most straightforward method for variable selection is to fit all possible combinations of the candidate predictors and choose a final model based on a measure of model fit; common measures include quantifications of predictive capability like mean square error, likelihood based measures such as Akaike Information Criterion (AIC) and Bayesian Information Criterion (BIC), and statistical comparisons of model fits with F-tests. However, this approach is only feasible for analyses with a relatively small pool of candidate predictors. Backward selection is a common approach that overcomes this problem by fitting a model with all candidates comparing it to reduced models excluding one predictor at a time. The model with the best fit is selected and this process is repeated until no predictors remain or the model fit cannot be improved by removing a predictor. Another approach is to place an L1 penalty on the vector of regression coefficients ($\beta$). This results in the shrinkage of some coefficients to zero, effectively removing the corresponding variable from the model. This can be done using only an L1 penalty (LASSO regression [2]) or a mix of L1 and L2 penalties (Elastic Net regression [3]). While these approaches often result in more parsimonious models, they can overfit to noise in the dataset and do not account for the selection procedure during model inference. This analysis will explore how these approaches perform in an array of simulated scenarios. Specifically, we will compare the performance of each method while varying sample size and the correlation between variables. Performance will be measured by assessing each methods ability to capture variables associated with the outcome and discard non-associated variables and then produce valid inference for the selected variables.
 
-# Preliminary Methods
+# Methods
 
-The purpose of this analysis is to explore the performance of different variable selection methods across differing sample sizes and correlations. Specifically, we will create simulated datasets with 20 variables sampled from a multivariate normal distribution with an exchangeable correlation structure. Five of the variables will be associated with the outcome with varying strength ranging from 1/6 to 5/6 with equal spacing. Standard normal noise will be added to the response. Datasets will be simulated for two sample sizes ($n=250,500$) and three correlations ($\rho=0, 0.35, 0.7$) resulting in six combinations. Each dataset will be replicated 10,000 times to ensure the accuracy of the estimated parameters. Using the simulated data, we will compare the performance of five different methods for variable selection: Backward selection based on p-values (from F-tests), AIC, and BIC as well as lasso regression and elastic net regression (with mixing parameter $\alpha = 0.5$). All regression models will be fit without an intercept term. P-value based Backward selection was performed with $p \ge 0.15$ as the threshold for excluding a parameter. For the lasso and elastic net approaches, we will use 10-fold cross validation to select the penalty parameter, $\lambda$, based on the average out-of-fold mean square error (MSE) and will compare the $\lambda$ that achieved the minimum MSE with the largest $\lambda$ within one standard error of the minimum. For the lasso and elastic net approaches, a simple linear regression model will be fit including all variables with non-zero coefficients. Selection performance will be assessed with the true positive rate, how often the method selected all five variables associated with the outcome, and true negative rate, how often the method did not select any of the variables not associated with the outcome. Additionally, we will investigate the rate of Type I and Type II errors, the bias of the parameter estimates, and the coverage of Wald-type 95% confidence intervals from each model. Any variables not selected will be assumed to be non-significant with a point estimate of zero with no error. All simulations were conducted using R (version `r params$version`). Random data generation and fold assignment will be controlled using a fixed seed for reproducibility.
+The purpose of this analysis was to explore the performance of different variable selection methods across several sample sizes and correlation strengths. Specifically, we created simulated datasets with 20 variables sampled from a multivariate standard normal distribution with an exchangeable correlation structure. Five of the variables were associated with the outcome with varying strengths (1/6, 2/6, 3/6, 4/6 and 5/6) and standard normal noise was added to the outcome. Datasets were simulated for two sample sizes ($n=250, 500$) and three correlations ($\rho=0, 0.35, 0.7$) resulting in six cases. Each case was replicated 10,000 times resulting in a worst case Monto Carlo coverage standard error of 0.005 which we deemed sufficiently low to compare performance between different selection methods [1]. Using the simulated data, we compared the performance of five different methods for variable selection: Backward selection based on p-values (from F-tests), AIC, and BIC as well as lasso regression [2] and elastic net regression [3] (with mixing parameter $\alpha = 0.5$). All regression models were fit without an intercept term as its true value was 0 and it was not being investigated as a part of the simulation. P-value based Backward selection was performed with $p \ge 0.05$ as the threshold for excluding a parameter; this was selected as it is the traditional threshold for significance and sits between the p-value equivalents for AIC and BIC (with $n = 250$). For the lasso and elastic net approaches, we used 10-fold cross validation to select the penalty parameter, $\lambda$, based on the average out-of-fold mean square error (MSE) and compared the $\lambda$ that achieved the minimum MSE with the largest $\lambda$ within one standard error of the minimum. For all selection methods, an OLS multiple linear regression model was refit including all selected variables. For each case and selection method, we calculated the proportion of time each variable was included in the model as well as the bias and coverage, based on Wald-type 95% confidence intervals, of the corresponding parameter estimates. Any variables not selected were assumed to be non-significant with a point estimate of zero with no error. Additionally, we investigated the rate of Type I and Type II errors. The Type I error was calculated at the model level, if any of the 15 non-associated variables were selected and had a significant p-value, it was recorded as a Type I error; this definition was used to ensure the calculation effectively captured how often a model included at least one significant variable with no true relationship with the outcome. Type II errors were calculated for each of the 5 associated variables separately because the rate depended primarily on the strength of the relationship with the outcome. All estimated parameters were calculated for each combination and for all selection methods. All simulations were conducted using R (version `r params$version`) and the data were simulated using the `gen_data` function from the hdrm package. AIC and BIC backwards selection were preformed using `step` from the stats package, LASSO and Elastic Net were implemented using `cv.glmnet` from the glmnet package, and an implementation of p-value backward selection was hand coded for this analysis. Random data generation and fold assignment was controlled using a fixed seed for reproducibility.
 
-<!-- # Discussion and Conclusion -->
+# Results
+
+We first investigated how the methods differed with respect to the how often they selected specific variables. *Figure 1* visualizes the frequency with which each selection method selected associated and non-associated variables. All backward selection methods selected non-associated variables at similar frequencies across all correlations and sample sizes. BIC selected the fewest and AIC selected the most with p-value-based selection inbetween. BIC selected slightly fewer non-associated variables at $n = 500$ compared to $n = 250$ as its penalty for model complexity increases with sample size. The frequency of non-associated variable selection for the LASSO and Elastic Net approaches varied substantially with correlation. When using the 1-SE $\lambda$, the models tended to select more non-associated variables as the correlation increases, while the minimum $\lambda$ models selected fewer non-associated variables as the correlation increased. LASSO and Elastic Net using the minimum $\lambda$ selected more non-associated variables than using 1-SE $\lambda$, which is expected as the 1-SE approach results in a higher penalty. All backwards selection methods saw a drop in the number of associated variables selected as correlation increased. In comparison, the LASSO and Elastic Net performed better, consistently selecting the associated variables even as correlation increased. For all selection methods, more of the associated variables were captured when the sample size increased. *Table 1* shows the frequency of selection across all effect sizes. As expected, the variables with higher effect sizes were selected most often. Additionally, as correlation increased, the variable with the weakest association (1/6) was generally selected less often while the variables with the strongest associations were always selected irrelevant of the degree of correlation.
+
+```{r, include=TRUE}
+table_selected
+```
+
+```{r, include=TRUE, fig.cap="Variable Selection Frequency across Association"}
+figure_heatmap
+```
+
+We next investigated how bias and confidence interval coverage differed across the selection methods. *Table 2* shows the bias and coverage across effect size for all methods and dataset variants. For uncorrelated data, all methods produced unbiased estimates and good coverage for the non-associated and highly associated variables. The weakly associated variables had negative bias and lower coverage. As correlation increased, estimates for the non-associated variables became positively biased, especially for the LASSO and Elastic Net approaches, while maintaining high coverage. As correlation increased, estimated for the associated variables became more biased and coverage decreased. However, the backwards selection and LASSO/Elastic Net approaches exhibited different patterns: backwards selection tended to perform very poorly (high bias and low coverage) for the variables with a weak associated while the LASSO/Elastic Net approaches performed better for the variables with a weak association and comparatively worse for the variables with a strong association. Across all approaches, bias decreased and coverage increased with sample size
+
+```{r, include=TRUE}
+table_bias_coverage
+```
+
+We lastly investigated Type I and Type II errors across the selection methods. *Table 3* displays the model-wise Type I error and the Type II error across each effect size. In the absence of correlation, the Type I error rate was the lowest for BIC-based backward selection. However, as correlation increased, the LASSO and Elastic Net approaches using the 1-SE $\lambda$ had substantially lower Type I error rates than the other approaches. For all methods, Type II errors increased as correlation increased. With increasing sample size, Type I errors remained consistent for the AIC, p-value, and min $\lambda$ approaches, while it decreased for the BIC and 1-SE $\lambda$ approaches. Type II errors substantially decreased across all methods as sample size increased.
+
+```{r, include=TRUE}
+table_error
+```
+
+# Discussion and Conclusion
+
+This analysis compared several different methods for model selection: Backwards selection based on AIC, BIC, and p-value as well as LASSO and Elastic Net regression with minimum $\lambda$ and 1-SE $\lambda$ penalties. As expected, all selection methods tended to perform better at higher sample sizes. For the purposes of model selection, LASSO and Elastic Net using the minimum $\lambda$ tended to perform poorly. Compared to the approaches using 1-SE $\lambda$, they selected more non-associated variables, had higher Type I error rates and only marginally better bias, coverage, and Type II error rates. In uncorrelated data, BIC-based backward selection resulted in the most parsimonious models. It had the lowest Type I error rate. However, this came at the cost of a somewhat higher Type II error rate and worse bias and coverage. At higher correlations, LASSO with a 1-SE $\lambda$ performed well. It maintained a similar Type II error rate to the other methods while selecting far fewer non-associated variables and maintaining a relatively lower Type I error rate. Based on these results, BIC-based backward selection performed the best for data that were uncorrelated and LASSO with a 1-SE $\lambda$ performed the best for correlated data.
+
+This analysis has several limitations and provides potential directions for future work. First, this analysis naively refit model and did not account for "multiple looks" at the data during the selection phase. This resulted in the high model-wise Type I error rates across the methods. Future analyses should test methods that do account for these multiple comparisons. Additionally, this analysis only investigated performance for an exchangeable correlation structure which is relatively simple. Future analyses should investigate performance for more complex correlation structures. Finally, this analysis only investigated two relatively high sample sizes and the results may differ for datasets with fewer observations.
+
+# References
+
+1. Morris, T. P., White, I. R., & Crowther, M. J. (2019). Using simulation studies to evaluate statistical methods. Statistics in medicine, 38(11), 2074–2102. https://doi.org/10.1002/sim.8086
+
+2. Tibshirani, Robert. (2011). Regression shrinkage selection via the LASSO. Journal of the Royal Statistical Society Series B. 73. 273-282. 10.2307/41262671. 
+
+2. Zou, H. and Hastie, T. (2005), Regularization and variable selection via the elastic net. Journal of the Royal Statistical Society: Series B (Statistical Methodology), 67: 301-320. https://doi.org/10.1111/j.1467-9868.2005.00503.x
 
 # Reproducible Research
 
